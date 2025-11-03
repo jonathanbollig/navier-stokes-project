@@ -57,38 +57,45 @@ class Grid2D:
         ax.add_patch(rect)
         plt.show()
 
-    def finite_difference(self, method="numpy"):
+    def center_difference(self, method="numpy"):
         """
         returns 2 new instances of a 2d grid class, containing x and y gradient as f
         allowed methods:
         - numpy  # uses numpy gradient --> center differential
-        - center  # not implemented
-        - left  # not implemented
-        - right # not implemented
+        - manual 
         """
         if method == "numpy":
             # np.gradient explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
             x_grad, y_grad = np.gradient(self.f, self.dx, self.dy)
-            x_grad_grid = Grid2D(self.x_n, self.y_n, self.x_dim, self.y_dim, self.n_ghost)
-            x_grad_grid.set_f(x_grad)
-            y_grad_grid = Grid2D(self.x_n, self.y_n, self.x_dim, self.y_dim, self.n_ghost)
-            y_grad_grid.set_f(y_grad)
-            return x_grad_grid, y_grad_grid
-        pass
+        elif method == "manual":
+            x_grad = (self.f[2:, :] - self.f[:-2, :])/2/self.dx
+            rhs = (self.f[-1, :]-self.f[-2, :])/self.dx
+            lhs = (self.f[1, :]-self.f[0, :])/self.dx
+            x_grad = np.concatenate(([lhs], x_grad, [rhs]))
+
+            y_grad = (self.f[:, 2:] - self.f[:, :-2])/2/self.dx
+            top = (self.f[:, -1]-self.f[:, -2])/self.dx
+            bottom = (self.f[:, 1]-self.f[:, 0])/self.dx
+            y_grad = np.concatenate(([top], y_grad.T, [bottom])).T  # a little hacky with the two '.T', but I think it's correct
+        else:
+            raise ValueError(f"Method {method} is not supported for 'center difference'")
+        x_grad_grid = Grid2D(self.x_n, self.y_n, self.x_dim, self.y_dim, self.n_ghost)
+        x_grad_grid.set_f(x_grad)
+        y_grad_grid = Grid2D(self.x_n, self.y_n, self.x_dim, self.y_dim, self.n_ghost)
+        y_grad_grid.set_f(y_grad)
+        return x_grad_grid, y_grad_grid
 
 if __name__ == "__main__":
     my_grid = Grid2D(10, 10, (0, np.pi), (0, np.pi), 2)
-    my_grid.calc_f(lambda x, y: np.sin(x*y))
+    my_grid.calc_f(lambda x, y: np.sin(x)*y)
     my_grid.imshow()
-    d_dx, d_dy = my_grid.finite_difference()
+    d_dx, d_dy = my_grid.center_difference(method="numpy")
+    d_dx2, d_dy2 = my_grid.center_difference(method="manual")
+    
+    # check if both methods yield the same result
+    print(np.max(np.abs(d_dx.f-d_dx2.f)))
+    print(np.max(np.abs(d_dy.f-d_dy2.f)))
+
+    # plot the gradients
     d_dx.imshow()
     d_dy.imshow()
-    """
-    plt.imshow(d_dx)
-    plt.show()
-    plt.imshow(d_dy)
-    plt.show()
-    print(my_grid.xs)
-    print(my_grid.ys)
-    print(my_grid.f)
-    """
