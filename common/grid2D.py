@@ -1,54 +1,6 @@
-"""
-IMPORTANT: This file is not further maintained. Code is copy paisted into files under /common/...
-"""
-
-
 import numpy as np 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-
-class GridND:
-    """
-    Started with an n-dimensional class, and then decided, this is over engineered and a waste of time. 
-    Maybe I will continue here in the future :)
-    """
-    def __init__(self, shape=(10, 10), dimensions=((0, 1), (0, 1)), n_ghost=0, f=None):
-        if len(shape) != len(dimensions):
-            raise ValueError(f"Length of shape and dimensions have to be the same, but where {len(shape)} and {len(dimensions)}")
-        if f is not None and (np.array(f.shape) != np.array(shape)+2*n_ghost).all():
-            print(f)
-            raise ValueError(f"The shape of f does not agree with shape: {np.array(f.shape)} vs {np.array(shape)+2*n_ghost}") 
-        self.shape = shape  # length of every dimension without ghost! 
-        self.n_ghost = n_ghost
-        self.dimensions = dimensions
-        self.hs = np.array([(dim[1] - dim[0])/len_ for len_, dim in zip(shape, dimensions)])
-        self.vectors = [self.create_vector(dim, h, n_ghost, len_) for dim, h, len_ in zip(dimensions, self.hs, shape)]
-        self.f = f 
-    
-    @staticmethod
-    def create_vector(dim, h, n_ghost, len_):
-        return np.linspace(dim[0] + (-n_ghost+1/2)*h, dim[1] + (n_ghost-1/2)*h, len_ + 2*n_ghost)
-
-    def calc_f(self, func):
-        # maybe "func" should be saved as well? 
-        # this uses broadcasting, see https://www.geeksforgeeks.org/numpy/numpy-array-broadcasting/
-        # self.f = func(*(self.arrs[i][(slice(None) if dim == i else None) for dim in range(n)] for i in range(n)))
-        broadcasted_views = np.ix_(*self.vectors)
-        self.f = func(*broadcasted_views)
-
-    def imshow(self):
-        if len(self.f.shape) != 2:
-            raise ValueError(f"Can only plot functions with 2 dimensions, but f has {len(self.f.shape)} dimensions.")
-        fig, ax = plt.subplots()
-        ax.imshow(self.f)
-        plt.show()
-
-    def center_difference(self):
-        # returns n new instances of a nd grid class, containing gradients as f
-        gradients = np.gradient(self.f, *self.hs) # explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
-        if len(gradients.shape) == 1:  # in the 1D-case, np.gradients returns an array, and not an array of arrays.
-            gradients = (gradients, )
-        return [GridND(self.shape, self.dimensions, self.n_ghost, gradient) for gradient in gradients]
 
 class Grid2D:
     def __init__(self, x_n=10, y_n=10, x_dim=(0, 1), y_dim=(0, 1), n_ghost=2, f=None):
@@ -105,7 +57,7 @@ class Grid2D:
         return x_grad_grid, y_grad_grid
 
 if __name__ == "__main__":
-    """my_grid = Grid2D(10, 20, (0, np.pi), (0, 2*np.pi), 2)
+    my_grid = Grid2D(10, 20, (0, np.pi), (0, 2*np.pi), 2)
     my_grid.calc_f(lambda x, y: np.sin(x)*y)
     my_grid.imshow()
     d_dx, d_dy = my_grid.center_difference(method="numpy")
@@ -118,20 +70,3 @@ if __name__ == "__main__":
     # plot the gradients
     d_dx.imshow()
     d_dy.imshow()
-
-    # ND Version
-    my_grid = GridND((10, 20), ((0, np.pi), (0, 2*np.pi)), 2)
-    my_grid.calc_f(lambda x, y: np.sin(x)*y)
-    my_grid.imshow()
-
-    gradients = my_grid.center_difference()
-    for gradient in gradients:
-        gradient.imshow()"""
-    my_grid = GridND((100,), ((0, 2*np.pi),))
-    my_grid.calc_f(lambda x: np.sin(x))
-    d_dx2 = my_grid.center_difference()[0]
-    plt.plot(my_grid.f)
-    plt.plot(d_dx2.f)
-    plt.show()
-
-
