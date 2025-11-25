@@ -9,8 +9,9 @@ class GridND:
     """
     def __init__(self, shape=(10, 10), dimensions=((0, 1), (0, 1)), n_ghost=0, f=None):
         if len(shape) != len(dimensions):
-            raise ValueError(f"Length of shape and dimensions have to be the same, but where {len(self.shape)} and {len(self.dimensions)}")
+            raise ValueError(f"Length of shape and dimensions have to be the same, but where {len(shape)} and {len(dimensions)}")
         if f is not None and (np.array(f.shape) != np.array(shape)+2*n_ghost).all():
+            print(f)
             raise ValueError(f"The shape of f does not agree with shape: {np.array(f.shape)} vs {np.array(shape)+2*n_ghost}") 
         self.shape = shape  # length of every dimension without ghost! 
         self.n_ghost = n_ghost
@@ -39,8 +40,9 @@ class GridND:
 
     def center_difference(self):
         # returns n new instances of a nd grid class, containing gradients as f
-        # np.gradient explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
-        gradients = np.gradient(self.f, *self.hs)
+        gradients = np.gradient(self.f, *self.hs) # explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
+        if len(gradients.shape) == 1:  # in the 1D-case, np.gradients returns an array, and not an array of arrays.
+            gradients = (gradients, )
         return [GridND(self.shape, self.dimensions, self.n_ghost, gradient) for gradient in gradients]
 
 class Grid2D:
@@ -80,8 +82,7 @@ class Grid2D:
         - manual 
         """
         if method == "numpy":
-            # np.gradient explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
-            x_grad, y_grad = np.gradient(self.f, self.dx, self.dy)
+            x_grad, y_grad = np.gradient(self.f, self.dx, self.dy) # explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
         elif method == "manual":
             x_grad = (self.f[2:, :] - self.f[:-2, :])/2/self.dx
             rhs = (self.f[-1, :]-self.f[-2, :])/self.dx
@@ -99,7 +100,7 @@ class Grid2D:
         return x_grad_grid, y_grad_grid
 
 if __name__ == "__main__":
-    my_grid = Grid2D(10, 20, (0, np.pi), (0, 2*np.pi), 2)
+    """my_grid = Grid2D(10, 20, (0, np.pi), (0, 2*np.pi), 2)
     my_grid.calc_f(lambda x, y: np.sin(x)*y)
     my_grid.imshow()
     d_dx, d_dy = my_grid.center_difference(method="numpy")
@@ -120,4 +121,12 @@ if __name__ == "__main__":
 
     gradients = my_grid.center_difference()
     for gradient in gradients:
-        gradient.imshow()
+        gradient.imshow()"""
+    my_grid = GridND((100,), ((0, 2*np.pi),))
+    my_grid.calc_f(lambda x: np.sin(x))
+    d_dx2 = my_grid.center_difference()[0]
+    plt.plot(my_grid.f)
+    plt.plot(d_dx2.f)
+    plt.show()
+
+
