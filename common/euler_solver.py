@@ -10,7 +10,7 @@ class EulerSolver:
         :param t_end: end time
         """
         self.f = func
-        self.u0 = u0
+        self.u0 = np.array(u0)
         self.t0 = t0
         self.t_end = t_end
 
@@ -21,7 +21,10 @@ class EulerSolver:
         # time array
         T = np.arange(self.t0, self.t_end + dt, dt)
         # iteration process
-        u = np.empty_like(T)
+        if self.u0.ndim == 0:
+            u = np.empty_like(T)
+        else:
+            u = np.zeros((len(T), len(self.u0)))
         u[0] = self.u0
         for n in range(1, len(T)):
             tn = T[n-1]
