@@ -1,22 +1,26 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-a=1
-
+# define function
 def f(t,u):
     return -(t - a) * u
 
-u = []
+# analytical solution
+def u_analytical(T, u_0, a):
+    return u_0 * np.exp(-0.5 * T**2 + a * T)
 
-def euler(f, t, u_0, dt):
+
+def euler(f, u_0, dt, t_0=0, t_end=3):
     """
-    u: function
+    f: function
+    u_0: initial value
     dt: step size
-    u_0 initial value
+    t_0: start time
+    t_end: end time
     """
-    T = np.arange(t_0, t + dt, dt)
-    #iteration process
+    # time array
+    T = np.arange(t_0, t_end + dt, dt)
+    # iteration process
     u = np.empty_like(T)
     u[0] = u_0
     for n in range(1, len(T)):
@@ -24,28 +28,21 @@ def euler(f, t, u_0, dt):
         u[n] = dt * f(tn, u[n-1]) + u[n-1]
     return u, T
 
+if __name__ == "__main__":
+    t_0 = 0
+    u_0 = 2
+    t = 3
+    dt = 0.001
+    a = 2
+
+    u, T = euler(f, u_0, dt, t_0, t)
+
+    u_ana = []
+    u_ana = u_analytical(T, u_0, a)
 
 
-t_0 = 0
-u_0 = 2
-t = 3
-dt = 0.001
-
-u, T = euler(f, t, u_0, dt)
-
-u_a = []
-
-def u_an(t, T):
-    for t in T:
-        u_a.append(np.exp(-1/2 * t**2 + a * t) * u_0)
-    return u_a
-
-u_a = u_an(t, T)
-
-
-
-plt.figure()
-plt.plot(T, u, label="u_num")
-plt.plot(T, u_a, label="u_ana")
-plt.legend()
-plt.show()
+    plt.figure()
+    plt.plot(T, u, label="u_num")
+    plt.plot(T, u_ana, label="u_ana")
+    plt.legend()
+    plt.show()
