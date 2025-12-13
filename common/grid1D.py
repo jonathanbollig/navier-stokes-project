@@ -80,7 +80,6 @@ class Grid1D:
     def second_derivative(self, method="center"):
         if method == "numpy":
             x_grad = np.gradient(self.f, self.h) # explenation: https://numpy.org/doc/stable/reference/generated/numpy.gradient.html
-            x_grad_grid = Grid1D(self.n, self.dim, self.n_ghost, x_grad)
             d2x = np.gradient(x_grad, self.h)
             d2x_grid = Grid1D(self.n, self.dim, self.n_ghost, d2x)
         elif method == "center":
@@ -92,7 +91,7 @@ class Grid1D:
             raise NotImplementedError()
         else:
             raise ValueError(f"Method {method} is not supported for 'derivative'")
-        return d2x
+        return d2x_grid
 
 if __name__ == "__main__":
     my_grid = Grid1D(20, (0, 1.5*np.pi), 2)
