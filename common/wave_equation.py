@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
 import plotly.graph_objects as go
+import matplotlib.animation as animation
 
 def solve_wave_equation(step: float, timestep: float, end_time: float, initial_state: np.array, 
                         initial_deriv: np.array, c: float = 1) -> np.array:
@@ -28,48 +29,89 @@ def solve_wave_equation(step: float, timestep: float, end_time: float, initial_s
 
     return np.array(U_sols)
     
-def initial_state(L: float, x: np.array, y: np.array, boundary_values: list[float]) -> np.array:
-    U = np.sin(np.pi * x / L) * np.sin(np.pi * y / L)
+def wavefunc(X, Y, L, c, t):
+    return np.sin(np.pi * X / L) * np.sin(np.pi * Y / L) * np.cos(2**(1 / 2) * np.pi * c * t / L)
+
+def initial_state(L: float, x: np.array, y: np.array, boundary_values: list[float], c: float = 1) -> np.array:
+    U = wavefunc(x, y, L, c, 0)
     U = np.pad(U, 1, constant_values=((boundary_values[0], boundary_values[1]), (boundary_values[2], boundary_values[3])))
     return U
 
-def animate_U(U_sols, X, Y):
-    import matplotlib.animation as animation
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Set static properties ONCE
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('u')
-    ax.set_zlim(-1, 1)
+def animate_U(U_sols, X, Y, U_ana=None, r_c_stride = 10):
+    """
+    Disclaimer: Slight refactor by Gemini, most work done by students
+    """
 
-    # 1. Create a list of lists (frames)
+    if U_ana is not None:
+        fig = plt.figure(figsize=(10, 4))
+        ax_num = fig.add_subplot(1, 2, 1, projection='3d')
+        ax_ana = fig.add_subplot(1, 2, 2, projection='3d')
+    else:
+        fig = plt.figure(figsize=(6, 4))
+        ax_num = fig.add_subplot(111, projection='3d')
+        ax_ana = None
+
+    ax_num.set_title('Numerical solution')
+    ax_num.set_xlabel('x')
+    ax_num.set_ylabel('y')
+    ax_num.set_zlabel('u')
+    ax_num.set_zlim(-1, 1)
+
+    if ax_ana is not None:
+        ax_ana.set_title('Analytical solution')
+        ax_ana.set_xlabel('x')
+        ax_ana.set_ylabel('y')
+        ax_ana.set_zlabel('u')
+        ax_ana.set_zlim(-1, 1)
+
     ims = []
-    
-    # Recommended for performance (adjust 1 to 10 based on grid size)
-    r_c_stride = 5 
-    
-    for U in U_sols:
-        # 2. IMPORTANT FIX: OMIT 'animated=True'
-        # Also, include strides for better performance
-        surf = ax.plot_surface(
-            X, Y, U, 
-            cmap='viridis', 
-            rstride=r_c_stride, 
-            cstride=r_c_stride
-        )
-        
-        # Each frame must be a list of artists (hence the [surf])
-        ims.append([surf])
+    r_c_stride = 5
 
-    # 3. Pass the list of frames to ArtistAnimation
-    # Set blit=False for 3D plots to avoid further rendering issues
+    if U_ana is not None:
+        ax_ana = fig.add_subplot(1, 2, 2, projection = '3d')
+        
+        ax_ana.set_xlabel('x')
+        ax_ana.set_ylabel('y')
+        ax_ana.set_zlabel('u')
+        
+        ax_ana.set_title('Analytical solution')
+        
+        ax_ana.set_zlim(-1, 1)
+
+    ims = []
+
+    if U_ana is not None:
+        for U_num, U_exact in zip(U_sols, U_ana):
+            surf_num = ax_num.plot_surface(
+                X, Y, U_num,
+                cmap='viridis',
+                rstride=r_c_stride,
+                cstride=r_c_stride
+            )
+
+            surf_ana = ax_ana.plot_surface(
+                X, Y, U_exact,
+                cmap='viridis',
+                rstride=r_c_stride,
+                cstride=r_c_stride
+            )
+
+            ims.append([surf_num, surf_ana])
+    else:
+        for U_num in U_sols:
+            surf_num = ax_num.plot_surface(
+                X, Y, U_num,
+                cmap='viridis',
+                rstride=r_c_stride,
+                cstride=r_c_stride
+            )
+
+            ims.append([surf_num])
+
     ani = animation.ArtistAnimation(fig, ims, interval=30, blit=False, repeat_delay=1000)
     
     plt.show()
     return ani
-
 
 def animate_U_plotly(U_sols, X, Y, frames_per_second=20, divider: int = 10):
     """
@@ -112,7 +154,7 @@ def animate_U_plotly(U_sols, X, Y, frames_per_second=20, divider: int = 10):
     fig = go.Figure(data=data, layout=layout, frames=frames)
     fig.show() # Opens in your browser/notebook
 
-def main() -> None:
+if __name__ == '__main__':
     L: float = 1
     c: float = 1
     step: float = 0.005
@@ -129,8 +171,8 @@ def main() -> None:
 
     U_sols = solve_wave_equation(step, timestep, end_time, U_init, dU_dt_init, c)
     U_sols_plot: np.array = U_sols[::(int(end_time / (100 * timestep)))]
-    # animate_U(U_sols_plot, X, Y) 
-    animate_U_plotly(U_sols_plot, X, Y)
-    
-if __name__ == '__main__':
-    animation = main()
+    times = np.linspace(0, int(end_time/timestep)*timestep, int(end_time/timestep))
+    times_plot = times[::(int(end_time / (100 * timestep)))]
+    U_analytical = wavefunc(X[np.newaxis, :, :], Y[np.newaxis, :, :], L, c, times_plot[:, np.newaxis, np.newaxis])
+    animate_U(U_sols_plot, X, Y, U_analytical) 
+    # animate_U_plotly(U_sols_plot, X, Y)
