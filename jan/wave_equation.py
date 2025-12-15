@@ -39,7 +39,6 @@ def solve_wave_equation(L: float, step: float, timestep: float, end_time: float,
     
     initialize_solutions(U, Pi, boundary_values, initial_state, initial_deriv, coords)
     t: float = 0
-    count: int = 0
 
     while t <= end_time:        
         Pi_change = c**2 * ((U[1:-1, 2:] - 2 * U[1:-1, 1:-1] + U[1:-1, :-2]) / step**2
@@ -48,18 +47,80 @@ def solve_wave_equation(L: float, step: float, timestep: float, end_time: float,
         Pi = Pi + timestep * Pi_change
         U[1:-1, 1:-1] = U[1:-1, 1:-1] + timestep * Pi
         
-        # if count % int(end_time / (100 * timestep)) == 0:
         U_sols.append(U[1:-1, 1:-1].copy())
     
         t = t + timestep
-        count = count + 1
     
     return coords, U_sols
+
+
+def plot_solutions(X_num: np.array, Y_num: np.array, U_num_plot: list[np.array],
+                   X_ana: np.array = None, Y_ana: np.array = None, U_ana_plot: list[np.array] = None):
+    fig = plt.figure(figsize = (10, 6))
+    ax_num = fig.add_subplot(1, 2, 1, projection = '3d')
+    
+    surf_num = ax_num.plot_surface(X_num, Y_num, U_num_plot[0], cmap = 'viridis')
+    
+    ax_num.set_xlabel('x')
+    ax_num.set_ylabel('y')
+    ax_num.set_zlabel('u')
+    
+    ax_num.set_title(f'Numerical solution with {X_num.shape[0]} by {X_num.shape[0]} grid points')
+    
+    ax_num.set_zlim(-1, 1)
+    
+    if U_ana_plot != None:
+        ax_ana = fig.add_subplot(1, 2, 2, projection = '3d')
+        
+        surf_ana = ax_ana.plot_surface(X_ana, Y_ana, U_ana_plot[0], cmap = 'viridis')
+        
+        ax_ana.set_xlabel('x')
+        ax_ana.set_ylabel('y')
+        ax_ana.set_zlabel('u')
+        
+        ax_ana.set_title('Analytical solution')
+        
+        ax_ana.set_zlim(-1, 1)
+    
+    def update(frame: int):
+        nonlocal surf_num
+        
+        surf_num.remove()
+        
+        U_num: np.array = U_num_plot[frame]
+        surf_num = ax_num.plot_surface(X_num, Y_num, U_num, cmap = 'viridis')
+        
+        if U_ana_plot != None:
+            nonlocal surf_ana
+            
+            surf_ana.remove()
+            
+            U_ana: np.array = U_ana_plot[frame]
+            surf_ana = ax_ana.plot_surface(X_ana, Y_ana, U_ana, cmap = 'viridis')
+        
+            return surf_num, surf_ana
+        
+        return surf_num
+        
+    
+    animation = FuncAnimation(fig, update, frames = len(U_num_plot), interval = 25, blit = False)
+    
+    plt.tight_layout(pad = 3.0)
+    plt.show()
+    
+    return animation
     
     
 
 def main() -> None:
-    def initial_state(L: float, x: float, y: float) -> float:
+    def analytical_solution(t: float, L: float, c: float) -> np.array:
+        coords: np.array = np.linspace(0, L, 101)
+        X, Y = np.meshgrid(coords, coords)
+        
+        return np.sin(np.pi * X / L) * np.sin(np.pi * Y / L) * np.cos(2**(1 / 2) * np.pi * c * t / L)
+    
+    
+    def initial_state(x: float, y: float, L: float) -> float:
         return np.sin(np.pi * x / L) * np.sin(np.pi * y / L)
         
     
@@ -70,45 +131,18 @@ def main() -> None:
     end_time: float = 2**(1 / 2) * c / L * 2
     boundary_values: list[float] = [0, 0, 0, 0]
     
-    coords, U_sols = solve_wave_equation(L, step, timestep, end_time, boundary_values,
-                                         lambda x, y: initial_state(L, x, y), lambda x, y: 0, c)
+    coords, U_num = solve_wave_equation(L, step, timestep, end_time, boundary_values,
+                                         lambda x, y: initial_state(x, y, L), lambda x, y: 0, c)
     
-    U_sols_plot: np.array = U_sols[::(int(end_time / (100 * timestep)))]
+    U_num_plot: np.array = U_num[::(int(end_time / (100 * timestep)))]
+    U_ana_plot: list[np.array] = [analytical_solution(i *  end_time / 100, L, c) for i in range(len(U_num_plot))]
+
+    X_num, Y_num = np.meshgrid(coords, coords)
+    X_ana, Y_ana = np.meshgrid(np.linspace(0, L, 101), np.linspace(0, L, 101))
     
-    X, Y = np.meshgrid(coords, coords)
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection = '3d')
-    
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('u')
-    
-    ax.set_zlim(-1, 1)
-    
-    ax.plot_surface(X, Y, U_sols_plot[0], cmap = 'viridis')
-    
-    def update(frame: int):
-        ax.clear()
-        
-        U: np.array = U_sols_plot[frame]
-        surf = ax.plot_surface(X, Y, U, cmap = 'viridis')
-        
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('u')
-        
-        ax.set_zlim(-1, 1)
-        
-        return surf,
-        
-    
-    animation = FuncAnimation(fig, update, frames = len(U_sols_plot), interval = 10, blit = False)
-    
-    plt.show()
+    animation = plot_solutions(X_num, Y_num, U_num_plot, X_ana, Y_ana, U_ana_plot)
     
     return animation
-    
     
     
 if __name__ == '__main__':
