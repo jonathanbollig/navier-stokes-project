@@ -8,6 +8,7 @@ Created on Sat Dec 13 12:41:16 2025
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
+import plotly.graph_objects as go
 
 def solve_wave_equation(step: float, timestep: float, end_time: float, initial_state: np.array, 
                         initial_deriv: np.array, c: float = 1) -> np.array:
@@ -32,31 +33,84 @@ def initial_state(L: float, x: np.array, y: np.array, boundary_values: list[floa
     U = np.pad(U, 1, constant_values=((boundary_values[0], boundary_values[1]), (boundary_values[2], boundary_values[3])))
     return U
 
-def animate_U(U_sols, X, Y):    
+def animate_U(U_sols, X, Y):
+    import matplotlib.animation as animation
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection = '3d')
+    ax = fig.add_subplot(111, projection='3d')
     
+    # Set static properties ONCE
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('u')
     ax.set_zlim(-1, 1)
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('u')
+
+    # 1. Create a list of lists (frames)
+    ims = []
     
-    ax.plot_surface(X, Y, U_sols[0], cmap = 'viridis')
+    # Recommended for performance (adjust 1 to 10 based on grid size)
+    r_c_stride = 5 
     
-    def update(frame: int):
-        ax.clear()
+    for U in U_sols:
+        # 2. IMPORTANT FIX: OMIT 'animated=True'
+        # Also, include strides for better performance
+        surf = ax.plot_surface(
+            X, Y, U, 
+            cmap='viridis', 
+            rstride=r_c_stride, 
+            cstride=r_c_stride
+        )
         
-        U: np.array = U_sols[frame]
-        surf = ax.plot_surface(X, Y, U, cmap = 'viridis')        
-        ax.set_zlim(-1, 1)    
-        return surf,
+        # Each frame must be a list of artists (hence the [surf])
+        ims.append([surf])
+
+    # 3. Pass the list of frames to ArtistAnimation
+    # Set blit=False for 3D plots to avoid further rendering issues
+    ani = animation.ArtistAnimation(fig, ims, interval=30, blit=False, repeat_delay=1000)
     
-    animation = FuncAnimation(fig, update, frames = len(U_sols), interval = 10, blit = False)
-    plt.show()   
-    return animation
+    plt.show()
+    return ani
+
+
+def animate_U_plotly(U_sols, X, Y, frames_per_second=20, divider: int = 10):
+    """
+    Disclaimer: This was mainly written by Gemini, and eddited by Jonathan
+    """
+    U_sols = U_sols[:, ::divider, ::divider]
+    X = X[::divider, ::divider]
+    Y = Y[::divider, ::divider]
+    # Create the data structure for the first frame
+    data = [go.Surface(z=U_sols[0], x=X, y=Y, colorscale='Viridis')]
+    
+    # Create frames
+    frames = []
+    for U in U_sols:
+        frame = go.Frame(data=[go.Surface(z=U, x=X, y=Y, colorscale='Viridis')],
+                         name=str(len(frames)))
+        frames.append(frame)
+
+    # Create the layout with animation controls
+    layout = go.Layout(
+        scene=dict(zaxis=dict(range=[-1, 1])),
+        updatemenus=[{
+            'buttons': [
+                {'args': [None, {'frame': {'duration': 1000/frames_per_second, 'redraw': True},
+                                 'fromcurrent': True, 'transition': {'duration': 0}}],
+                 'label': 'Play',
+                 'method': 'animate'}
+            ],
+            'type': 'buttons',
+            'pad': {'r': 10, 't': 87},
+            'showactive': False,
+            'x': 0.1,
+            'xanchor': 'right',
+            'y': 0,
+            'yanchor': 'top'
+        }],
+        # ... add more layout configs (titles, etc.)
+    )
+
+    fig = go.Figure(data=data, layout=layout, frames=frames)
+    fig.show() # Opens in your browser/notebook
 
 def main() -> None:
     L: float = 1
@@ -75,7 +129,8 @@ def main() -> None:
 
     U_sols = solve_wave_equation(step, timestep, end_time, U_init, dU_dt_init, c)
     U_sols_plot: np.array = U_sols[::(int(end_time / (100 * timestep)))]
-    animate_U(U_sols_plot, X, Y) 
+    # animate_U(U_sols_plot, X, Y) 
+    animate_U_plotly(U_sols_plot, X, Y)
     
 if __name__ == '__main__':
     animation = main()

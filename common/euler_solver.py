@@ -19,7 +19,7 @@ class EulerSolver:
         :param dt: step size
         """
         # time array
-        T = np.arange(self.t0, self.t_end + dt, dt)
+        T = np.arange(self.t0, self.t_end + 1/2*dt, dt)
         # iteration process
         if self.u0.ndim == 0:
             u = np.empty_like(T)
