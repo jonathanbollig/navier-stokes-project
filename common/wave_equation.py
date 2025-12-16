@@ -37,7 +37,7 @@ def initial_state(L: float, x: np.array, y: np.array, boundary_values: list[floa
     U = np.pad(U, 1, constant_values=((boundary_values[0], boundary_values[1]), (boundary_values[2], boundary_values[3])))
     return U
 
-def animate_U(U_sols, X, Y, U_ana=None, r_c_stride = 10):
+def animate_U(U_sols, X, Y, U_ana=None, r_c_stride = 20):
     """
     Disclaimer: Slight refactor by Gemini, most work done by students
     """
@@ -65,7 +65,6 @@ def animate_U(U_sols, X, Y, U_ana=None, r_c_stride = 10):
         ax_ana.set_zlim(-1, 1)
 
     ims = []
-    r_c_stride = 5
 
     if U_ana is not None:
         ax_ana = fig.add_subplot(1, 2, 2, projection = '3d')
@@ -153,6 +152,9 @@ def animate_U_plotly(U_sols, X, Y, frames_per_second=20, divider: int = 10):
 
     fig = go.Figure(data=data, layout=layout, frames=frames)
     fig.show() # Opens in your browser/notebook
+
+def MSE(U1, U2):
+    return ((U1-U2)**2).mean()
 
 if __name__ == '__main__':
     L: float = 1
