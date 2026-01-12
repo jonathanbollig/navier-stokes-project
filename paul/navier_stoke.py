@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+import matplotlib.animation as ani
 import numpy as np
 
 import numpy as np
@@ -12,6 +12,7 @@ class NavierStokesSolver:
         self.Re = Re
         self.gx, self.gy = gx, gy
         self.gamma = 0.9 # weighting factor (eq. 38)
+        self.t = 0
         
         # arrays with ghost cells
         self.u = np.zeros((nx + 2, ny + 2))
@@ -39,6 +40,7 @@ class NavierStokesSolver:
         u, v = self.u, self.v
         dx, dy = self.dx, self.dy
         Re = self.Re
+        gx, gy = self.gx, self.gy
         gamma = self.gamma
 
         F = u.copy()
@@ -52,7 +54,7 @@ class NavierStokesSolver:
 
         v_center    = v[1:-1, 1:-1]
         v_right     = v[2:, 1:-1]
-        v_left      = v[-2:, 1:-1]
+        v_left      = v[:-2, 1:-1]
         v_top       = v[1:-1, 2:]
         v_bot       = v[1:-1, :-2]
         v_bot_right = v[2:, :-2]
@@ -77,82 +79,146 @@ class NavierStokesSolver:
         v_diff_top = (v_center - v_top) / 2
         v_diff_bot = (v_bot - v_center) / 2
 
-        du2_dy = ((v_avg_top**2 - v_avg_bot**2) + gamma * (np.abs(v_avg_top)*v_diff_top - np.abs(v_avg_bot)*v_diff_bot)) / dy
+        dv2_dy = ((v_avg_top**2 - v_avg_bot**2) + gamma * (np.abs(v_avg_top)*v_diff_top - np.abs(v_avg_bot)*v_diff_bot)) / dy
 
-        # nonlinear derivative uv
+        # nonlinear derivative uv eq 37, 35
+        v_avg_right = (v_right + v_center) / 2
+        u_avg_top = (u_top + u_center) / 2
+        v_avg_brb = (v_bot + v_bot_right) /2
+        u_avg_bot = (u_bot + u_center)/2
+        u_diff_top = (u_center - u_top) / 2
+        u_avg_lbr = (u_left + u[:-2,2:]) / 2
+        v_avg_left = (v_left + v_center) / 2
+        u_diff_bot = (u_bot - u_center) / 2
+        v_diff_right = (v_center - v_right) / 2
+        v_diff_left = (v_left - v_center) / 2
+
+        duv_dy = (v_avg_right*u_avg_top - v_avg_brb*u_avg_bot + gamma * (np.abs(v_avg_right) * u_diff_top - np.abs(v_avg_brb)*u_diff_bot)) / dy
+        duv_dx = (u_avg_top*v_avg_right - u_avg_lbr*v_avg_left + gamma* (np.abs(u_avg_top)*v_diff_right - np.abs(u_avg_lbr)*v_diff_left)) / dx 
+
+        F[1:-1,1:-1] = u_center + dt * ((d2u_dx2 + d2u_dy2) / Re - du2_dx - duv_dy + gx) 
+        G[1:-1,1:-1] = v_center + dt * ((d2v_dx2 + d2v_dy2) / Re - duv_dx - dv2_dy + gy)
+
+        G[:, 0] = 0.0
+        G[:, -2] = 0.0 
+        F[0, :] = 0.0
+        F[-2, :] = 0.0
+
+        self.F = F
+        self.G = G
+
+        return F, G
+
+    def SOR(self, dt, max_it = 1000):
         
-        pass 
+        dx, dy = self.dx, self.dy
+        F, G = self.F, self.G
+        p = self.p.copy()
 
-    def solve_pressure_poisson(self, dt):
-        # 1. Berechne RHS (Gl. 41)
-        # 2. SOR Iteration (Gl. 42)
+        # RHS eq. 41
+        RHS = np.zeros_like(p)
+        RHS[1:-1,1:-1] = ((F[1:-1,1:-1] - F[:-2,1:-1]) / dx + (G[1:-1,1:-1] - G[1:-1,:-2]) / dy) / dt
+        print("mean RHS", np.mean(RHS[1:-1,1:-1]))
+        # 2. SOR iteration (eq. 42)
         it = 0
-        residual = 1e6
-        omega = 1.7 # Relaxationsfaktor
+        epsilon = 1e-3
+        residual = np.zeros_like(p)
+        norm_p = np.linalg.norm(p)
+        if norm_p < 1e-10:
+            norm_p = 1
+        tolerance = max(epsilon * norm_p, 1e-4)
+        omega = 1.7 # relaxation factor
+
+        residual_norm = tolerance * 2
         
-        while residual > 1e-4 and it < 1000:
-            # Update p
-            # Berechne residual
+        while residual_norm > tolerance and it < max_it:
+            for i in range(1, self.nx + 1):
+                for j in range(1, self.ny + 1):
+                    # update p
+                    p[i,j] = (1-omega) * p[i,j] + omega/(2*(1/dx**2+1/dy**2)) * ((p[i+1,j]+p[i-1,j])/dx**2 + (p[i,j+1]+p[i,j-1])/dy**2 - RHS[i,j]) 
+            
+            # fill boundary cells
+            p[0,1:-1] = p[1,1:-1]
+            p[1:-1,0] = p[1:-1,1]
+            p[-1,1:-1] = p[-2,1:-1]
+            p[1:-1,-1] = p[1:-1,-2]
+            #p[1,1] = 0
+
+            # calculate residual
+            residual[1:-1,1:-1] = (p[2:,1:-1] - 2*p[1:-1,1:-1] + p[:-2,1:-1])/dx**2 + (p[1:-1,2:] - 2*p[1:-1,1:-1] + p[1:-1,:-2])/dy**2 - RHS[1:-1,1:-1]
+            residual_norm = np.max(np.abs(residual))
             it += 1
-            pass
+        self.p = p
+        print("#iterations:", it)
+        return p
             
     def update_velocities(self, dt):
+        dx, dy = self.dx, self.dy
+        F, G = self.F, self.G
+        u, v = self.u, self.v
+        p = self.p
         # Berechne u_neu und v_neu basierend auf F, G und p (Gl. 21, 22)
-        # u[i,j] = F[i,j] - dt/dx * (p[i+1,j] - p[i,j])
-        pass
+        u[1:-1,1:-1] = F[1:-1,1:-1] - dt/dx * (p[2:,1:-1] - p[1:-1,1:-1])
+        v[1:-1,1:-1] = G[1:-1,1:-1] - dt/dy * (p[1:-1,2:] - p[1:-1,1:-1])
+        return u, v
+    
 
-    def step(self, dt):
-        # Hauptschleife pro Zeitschritt (Abschnitt 5 im PDF)
+    # main loop (section 5)
+    def step(self, dt, t):
         self.apply_boundary_conditions()
         self.calculate_F_G(dt)
-        self.solve_pressure_poisson(dt)
+        if t == 0:
+            self.SOR(dt, 2e4)
+        else:
+            self.SOR(dt)
+        print("p:", np.min(self.p))
         self.update_velocities(dt)
 
-# Beispiel Nutzung
-solver = NavierStokesSolver(nx=50, ny=50, len_x=1.0, len_y=1.0, Re=100)
-# Zeitschleife hier...
+# lid driven cavity
+if __name__ == "__main__":
+    sim = NavierStokesSolver(nx=40, ny=40, len_x=1.0, len_y=1.0, Re=1000)
 
-def solve_navier_stoke(step: float, timestep: float, endtime: float, x_velocity: np.array, y_velocity: np.array, pressure: np.array,  gx: float = 0, gy: float = -9.81, Re: float = 100)
+    sim.t = 0
+    t_end = 0.1
+    dt = 1e-2
+
+    # grid for plot
+    x = np.linspace(0, 1.0, sim.nx)
+    y = np.linspace(0, 1.0, sim.ny)
+    X, Y = np.meshgrid(x, y)
+
+    fig = plt.figure()
+
+    def animate(frame):
+        steps_per_frame = 30
+        for _ in range(steps_per_frame):
+            if sim.t < t_end:
+                sim.step(dt, sim.t)
+                sim.t += dt
+                max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
+                print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
+            else:
+                animation.event_source.stop()    
+
+        # set u and v back into the middle
+        u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
+        v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
+        # velocity abs value
+        velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
+        
+        
+        plt.contourf(X, Y, velocity_mag.T)
+        plt.colorbar(label='velocity magnitude')
+
+        plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
+        
+        plt.title(f"Lid Driven Cavity (Re={sim.Re}, t={sim.t:.2f}s)")
+        plt.xlabel("x")
+        plt.ylabel("y")
+        plt.clf()
+
+
+    animation = ani.FuncAnimation(fig, animate, interval = 50, cache_frame_data=False)
+    plt.show()
+    animation.save("lid_driven_cavity.gif", writer="pillow", fps=15)
     
-    u: np.array = x_velocity
-    v: np.array = y_velocity
-    p: np.array = pressure
-
-    u_sols: list[np.array] = []
-        for _ in range(int(end_time/timestep)):
-            u_change = (1 / Re) * ((u[1:-1, 2:] - 2 * u[1:-1, 1:-1] + u[1:-1, :-2]) / step**2
-                                + (u[2:, 1:-1] - 2 * u[1:-1, 1:-1] + u[:-2, 1:-1]) / step**2)
-
-            v_change = (1 / Re) * ((v[1:-1, 2:] - 2 * v[1:-1, 1:-1] + v[1:-1, :-2]) / step**2
-                                + (v[2:, 1:-1] - 2 * v[1:-1, 1:-1] + v[:-2, 1:-1]) / step**2)
-
-
-            du2_dx = (u[1:-1, 2:]**2 - u[1:-1, :-2]**2) / (2 * step)
-            duv_dy = (u[2: , 1:-1] * v[2: , 1:-1]  - u[:-2 , 1:-1] * v[:-2 , 1:-1]) / (2 * step)
-            duv_dx = (u[1:-1, 2:] * v[1:-1, 2:] - u[1:-1, :-2] * v[1:-1, :-2]) / (2 * step)
-            dv2_dy = (v[2: , 1:-1]**2 - v[:-2 , 1:-1])**2 / (2 * step)
-            F = u[1:-1, 1:-1] + (u_change - du2_dx - duv_dy + gx) * timestep
-            G = v[1:-1, 1:-1] + (v_change - dv2_dx - duv_dx + gy) * timestep
-
-            F = u.copy()
-            G = v.copy()
-
-            F[1:-1, 1:-1] = u[1:-1, 1:-1] + timestep * (u_change + u_ad)
-            G[1:-1, 1:-1] = v[1:-1, 1:-1] + timestep * (v_change + v_ad)
-
-            # boundary conditions
-            F[0, :] = 0  
-            F[-1, :] = 1 
-            F[:, 0] = 0  
-            F[:, -1] = 0 
-
-            G[0, :] = 0  
-            G[-1, :] = 0 
-            G[:, 0] = 0  
-            G[:, -1] = 0
-
-            u = F
-            v = G
-        return F , G
-
-
