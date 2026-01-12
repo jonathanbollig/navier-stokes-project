@@ -177,10 +177,10 @@ class NavierStokesSolver:
 
 # lid driven cavity
 if __name__ == "__main__":
-    sim = NavierStokesSolver(nx=50, ny=50, len_x=1.0, len_y=1.0, Re=10)
+    sim = NavierStokesSolver(nx=40, ny=40, len_x=1.0, len_y=1.0, Re=100)
 
     sim.t = 0
-    t_end = 1
+    t_end = 0.1
     dt = 1e-2
 
     while sim.t < t_end:
