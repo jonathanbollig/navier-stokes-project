@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 import numpy as np
-
-import numpy as np
+import os
+import pickle
 
 class NavierStokesSolver:
     def __init__(self, nx, ny, len_x, len_y, Re, gx=0.0, gy=0.0):
@@ -181,30 +181,48 @@ class NavierStokesSolver:
             print("mean RHS", mean_rhs)
             print("#iterations:", it)
 
+    # a function that saves the complete object to a file, so it can be reloaded for plotting later
+    def save(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
+
+
 # lid driven cavity
 if __name__ == "__main__":
-    self = NavierStokesSolver(nx=40, ny=40, len_x=1.0, len_y=1.0, Re=100)
-    self.iterate(t_end=0.1, dt=1e-2)
+
+    dt = 1e-2
+    t_end = 0.1
+    Re = 100
+    nx, ny = 40, 40
+    filename = f"lid_driven_n{nx}_re{Re}_t{int(t_end*1000)}_dt{int(dt*1000)}.pkl"
+    
+    # check if file exists
+    if os.path.exists(filename):
+        with open(filename, 'rb') as f:
+            sim = pickle.load(f)
+    else:
+        sim = NavierStokesSolver(nx=nx, ny=ny, len_x=1.0, len_y=1.0, Re=Re)
+        sim.iterate(t_end=t_end, dt=dt)
+        sim.save(filename)
 
     # grid for plot
-    x = np.linspace(0, 1.0, self.nx)
-    y = np.linspace(0, 1.0, self.ny)
+    x = np.linspace(0, 1.0, sim.nx)
+    y = np.linspace(0, 1.0, sim.ny)
     X, Y = np.meshgrid(x, y)
 
 
     # set u and v back into the middle
-    u_plot = (self.u[1:-1, 1:-1] + self.u[2:, 1:-1]) / 2
-    v_plot = (self.v[1:-1, 1:-1] + self.v[1:-1, 2:]) / 2
+    u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
+    v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
     # velocity abs value
     velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
-    
     
     plt.contourf(X, Y, velocity_mag.T)
     plt.colorbar(label='velocity magnitude')
 
     plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
     
-    plt.title(f"Lid Driven Cavity (Re={self.Re}, t={self.t:.2f}s)")
+    plt.title(f"Lid Driven Cavity (Re={Re}, t={t_end:.2f}s)")
     plt.xlabel("x")
     plt.ylabel("y")
 
