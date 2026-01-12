@@ -29,6 +29,8 @@ class NavierStokesSolver:
         self.u[:, 0] = -self.u[:, 1]
         self.u[:, -1] = 2 - self.u[:, -2]
 
+
+
         self.v[0, :] = -self.v[1, :]
         self.v[-1, :] = -self.v[-2, :]
         self.v[:, 0] = 0  
@@ -75,7 +77,6 @@ class NavierStokesSolver:
         # nonlinear derivative v
         v_avg_top = (v_center + v_top) / 2
         v_avg_bot = (v_center + v_bot) / 2
-        v_avg_bot_right = (v_bot + v_bot_right) / 2
         v_diff_top = (v_center - v_top) / 2
         v_diff_bot = (v_bot - v_center) / 2
 
@@ -176,49 +177,73 @@ class NavierStokesSolver:
 
 # lid driven cavity
 if __name__ == "__main__":
-    sim = NavierStokesSolver(nx=40, ny=40, len_x=1.0, len_y=1.0, Re=1000)
+    sim = NavierStokesSolver(nx=50, ny=50, len_x=1.0, len_y=1.0, Re=10)
 
     sim.t = 0
-    t_end = 0.1
+    t_end = 1
     dt = 1e-2
+
+    while sim.t < t_end:
+        sim.step(dt, sim.t)
+        sim.t += dt
+        max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
+        print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
 
     # grid for plot
     x = np.linspace(0, 1.0, sim.nx)
     y = np.linspace(0, 1.0, sim.ny)
     X, Y = np.meshgrid(x, y)
 
-    fig = plt.figure()
 
-    def animate(frame):
-        steps_per_frame = 30
-        for _ in range(steps_per_frame):
-            if sim.t < t_end:
-                sim.step(dt, sim.t)
-                sim.t += dt
-                max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
-                print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
-            else:
-                animation.event_source.stop()    
+    # set u and v back into the middle
+    u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
+    v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
+    # velocity abs value
+    velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
+    
+    
+    plt.contourf(X, Y, velocity_mag.T)
+    plt.colorbar(label='velocity magnitude')
 
-        # set u and v back into the middle
-        u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
-        v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
-        # velocity abs value
-        velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
-        
-        
-        plt.contourf(X, Y, velocity_mag.T)
-        plt.colorbar(label='velocity magnitude')
+    plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
+    
+    plt.title(f"Lid Driven Cavity (Re={sim.Re}, t={sim.t:.2f}s)")
+    plt.xlabel("x")
+    plt.ylabel("y")
 
-        plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
-        
-        plt.title(f"Lid Driven Cavity (Re={sim.Re}, t={sim.t:.2f}s)")
-        plt.xlabel("x")
-        plt.ylabel("y")
-        plt.clf()
-
-
-    animation = ani.FuncAnimation(fig, animate, interval = 50, cache_frame_data=False)
     plt.show()
-    animation.save("lid_driven_cavity.gif", writer="pillow", fps=15)
+
+    #fig = plt.figure()
+
+    # def animate(frame):
+    #     steps_per_frame = 30
+    #     for _ in range(steps_per_frame):
+    #         if sim.t < t_end:
+    #             sim.step(dt, sim.t)
+    #             sim.t += dt
+    #             max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
+    #             print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
+    #         else:
+    #             animation.event_source.stop()    
+
+    #     # set u and v back into the middle
+    #     u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
+    #     v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
+    #     # velocity abs value
+    #     velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
+        
+        
+    #     plt.contourf(X, Y, velocity_mag.T)
+    #     plt.colorbar(label='velocity magnitude')
+
+    #     plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
+        
+    #     plt.title(f"Lid Driven Cavity (Re={sim.Re}, t={sim.t:.2f}s)")
+    #     plt.xlabel("x")
+    #     plt.ylabel("y")
+    #     plt.clf()
+
+
+    # animation = ani.FuncAnimation(fig, animate, interval = 50, cache_frame_data=False)
+    #animation.save("lid_driven_cavity.gif", writer="pillow", fps=15)
     
