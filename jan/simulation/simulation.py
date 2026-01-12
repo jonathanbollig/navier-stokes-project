@@ -119,7 +119,7 @@ def lid_driven_cavity_simulation(domain_size: list[float], grid_size: list[int],
     U_sol: list[np.array] = []
     V_sol: list[np.array] = []
     P_sol: list[np.array] = []
-    t_sol: list[float] = [0]
+    t_sol: list[float] = []
     
     # Print a message at certain timesteps to track progress:
     print_times: list[float] = np.arange(0, int(T_max + 1), 0.25)
@@ -146,7 +146,7 @@ def lid_driven_cavity_simulation(domain_size: list[float], grid_size: list[int],
         
         # Print a message at certain timesteps to track progress:
         if t >= print_times[print_index]:
-            print("t = " + str(np.round(t, 2)))
+            print("Passed t = " + str(print_times[print_index]))
             
             print_index = print_index + 1
         
@@ -155,18 +155,21 @@ def lid_driven_cavity_simulation(domain_size: list[float], grid_size: list[int],
 
 def main():
     domain_size: list[float] = [1, 1]
-    grid_size: list[int] = [50, 50]
+    grid_size: list[int] = [70, 70]
     x_vel: float = 2
     Re: float = 500
-    tau: float = 0.5
+    tau: float = 1
     omega: float = 1
     epsilon: float = 0.01
-    T_max: float = 5
+    T_max: float = 7
     # N_max_P: int = 100
     
     solutions = lid_driven_cavity_simulation(domain_size, grid_size, x_vel, Re, tau, omega, epsilon, T_max)
     
-    animation = plot.animate_solution(solutions, domain_size[0], domain_size[1])
+    plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
+    quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
+    
+    animation = plot.animate_solution(solutions, domain_size, quiver_scale, plot_log_vel)
     # animation.save('animation.gif', writer = 'pillow', fps = 20)
     
     return animation

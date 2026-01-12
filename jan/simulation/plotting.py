@@ -50,9 +50,12 @@ def animate_solution_alternate(solutions: list[list[np.array], list[float]], a: 
     return animation
 
 
-def animate_solution(solutions: list[list[np.array], list[float]], a: float, b: float):
-    # frame_skip: int = len(solutions[0]) / 100
-    frame_skip: int = 20
+def animate_solution(solutions: list[list[np.array], list[float]], domain_size: list[float], 
+                     quiver_scale: float = None, plot_log_vel: bool = False,
+                     log_vel_exp: float = 2, frame_skip: int = None) -> ani.FuncAnimation:
+    if frame_skip == None:
+        # frame_skip: int = len(solutions[0]) / 100
+        frame_skip = 20
     
     # Initialize solution arrays:
     U_sol = solutions[0][::frame_skip]
@@ -65,6 +68,25 @@ def animate_solution(solutions: list[list[np.array], list[float]], a: float, b: 
         V_sol[i] = conv.V_like_to_grid(V_sol[i])
         P_sol[i] = conv.P_like_to_grid(P_sol[i])
         
+        # Convert velocity vectors to logarithmic scale for better visualization:
+        if plot_log_vel:
+            M: np.array = np.sqrt(U_sol[i]**2 + V_sol[i]**2)
+            
+            # Add small value epsilon to avoid log(0):
+            epsilon = 1e-10
+            log_M: np.array = np.log2(M + epsilon)
+            
+            # Normalize log magnitudes to a positive scale for better visualization:
+            log_M_norm = (log_M - log_M.min()) / (log_M.max() - log_M.min())
+            
+            # Apply power law to amplify difference between longest and shortest arrows:
+            gamma: float = log_vel_exp
+            
+            # Scale U and V by normalized log magnitude keeping direction:
+            U_sol[i] = (U_sol[i] / (M + epsilon)) * log_M_norm**gamma
+            V_sol[i] = (V_sol[i] / (M + epsilon)) * log_M_norm**gamma
+    
+    a, b = domain_size
     N_y, N_x = P_sol[0].shape
     
     X, Y = np.meshgrid(np.linspace(0, a, N_x), np.linspace(0, b, N_y))
@@ -81,9 +103,9 @@ def animate_solution(solutions: list[list[np.array], list[float]], a: float, b: 
     im = ax.imshow(np.flipud(P_sol[0]), extent = (0, a, 0, b), origin = 'lower')
 
     # Initial quiver plot for velocity field:
-    skip = int(np.round(3 * N_x / 50))  # to reduce number of arrows for clarity and performance
-    quiv = ax.quiver(X[::skip, ::skip], Y[::skip, ::skip], U_sol[0][::skip, ::skip], 
-                     -V_sol[0][::skip, ::skip], color = 'white')
+    skip = int(np.round(3 * N_x / 50))  # reduce number of arrows for clarity and performance
+    quiv = ax.quiver(X[::skip, ::skip], Y[::skip, ::skip], U_sol[0][::skip, ::skip], -V_sol[0][::skip, ::skip], 
+                     color = 'white', scale_units = 'xy', scale = quiver_scale)
     
     # Colorbar for pressure values:
     cbar = fig.colorbar(im, ax = ax)
@@ -98,7 +120,7 @@ def animate_solution(solutions: list[list[np.array], list[float]], a: float, b: 
         
         return [im, quiv]
     
-    animation = ani.FuncAnimation(fig, update, frames = len(U_sol), interval = 50, blit = False)
+    animation = ani.FuncAnimation(fig, update, frames = len(U_sol), interval = 50)
     
     plt.show()
     
