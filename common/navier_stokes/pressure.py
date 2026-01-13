@@ -12,12 +12,8 @@ import derivatives as deriv
 
 
 
-def norm(field: np.array) -> float:
-    # L2 norm:
-    field_shape: tuple[int, int] = field.shape
-    
-    return np.sqrt(1 / (field_shape[0] * field_shape[1]) * np.cumsum(np.square(field))[-1])
-
+def norm_L2(field: np.array) -> float:
+    return np.sqrt(1 / (field.shape[0] * field.shape[1]) * np.cumsum(np.square(field))[-1])
 
 def calc_new_pressure(F: np.array, G: np.array, P: np.array, delta_x: float, delta_y: float, 
                       delta_t: float, omega: float, epsilon: float, N_max: int = 100) -> np.array:
@@ -30,7 +26,7 @@ def calc_new_pressure(F: np.array, G: np.array, P: np.array, delta_x: float, del
     RHS = conv.P_like_from_grid(RHS)
     
     P_it: np.array = P.copy()
-    P_0_norm: float = norm(P)
+    P_0_norm: float = norm_L2(P)
     residual_norm: float = epsilon * P_0_norm + 1
     n = 0
     
@@ -45,11 +41,9 @@ def calc_new_pressure(F: np.array, G: np.array, P: np.array, delta_x: float, del
         P_new[:, 0], P_new[:, -1] = P_it[:, 1], P_it[:, -2]
         
         residual: np.array = deriv.lin_x(P_new, delta_x, 2) + deriv.lin_y(P_new, delta_y, 2) - RHS
-        residual_norm = norm(residual)
+        residual_norm = norm_L2(residual)
         
         P_it = P_new
         n = n + 1
-    
-    # print(n)
-        
+
     return P_it

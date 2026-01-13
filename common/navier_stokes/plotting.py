@@ -8,7 +8,7 @@ Created on Sun Jan 11 19:52:56 2026
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 import numpy as np
-from navier_stokes2 import navier_stokes_simulation
+from navier_stokes import navier_stokes_simulation
 import conversions as conv
 
 def animate_simulation(sim: navier_stokes_simulation, 
