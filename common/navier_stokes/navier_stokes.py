@@ -208,8 +208,8 @@ if __name__ == '__main__':
     ny: int = 50
     len_x: float = 1
     len_y: float = 1
-    Re: float = 200
-    T_max: float = 10
+    Re: float = 500
+    T_max: float = 15
     
     filename: str = f"lid_driven_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
     
@@ -229,9 +229,7 @@ if __name__ == '__main__':
     # plt.plot(simulation.t_history)
     # plt.show()
     # plotting
-    
-    # plot_log_vel = False # False # enable logarithmic scaling of velocity vectors
-    # quiver_scale = 8     # 8     # adjust length of plotted arrows (smaller -> longer)
-    # animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
-    
-    plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
+    plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
+    quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
+    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
+    # plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])

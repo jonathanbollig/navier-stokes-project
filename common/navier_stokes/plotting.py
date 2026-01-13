@@ -15,8 +15,8 @@ from navier_stokes import navier_stokes_simulation
 import conversions as conv
 
 def animate_simulation(sim: navier_stokes_simulation, 
-                       quiver_scale: float = None, plot_log_vel: bool = False,
-                       log_vel_exp: float = 2, frame_skip: int = None) -> ani.FuncAnimation:
+                     quiver_scale: float = None, plot_log_vel: bool = False,
+                     log_vel_exp: float = 2, frame_skip: int = None, save: str = None) -> ani.FuncAnimation:
     if frame_skip == None:
         # frame_skip: int = len(solutions[0]) / 100
         frame_skip = 20
@@ -34,6 +34,7 @@ def animate_simulation(sim: navier_stokes_simulation,
         
         # Convert velocity vectors to logarithmic scale for better visualization:
         if plot_log_vel:
+            
             M: np.array = np.sqrt(U_sol[i]**2 + V_sol[i]**2)
             
             # Add small value epsilon to avoid log(0):
@@ -63,12 +64,12 @@ def animate_simulation(sim: navier_stokes_simulation,
     ax.set_title(f"Grid: ({N_x}, {N_y})\n" + f"t = {np.round(t_sol[0], 3)}")
 
     # Initial image plot for pressure field:
-    im = ax.imshow(np.flipud(P_sol[0]), extent = (0, sim.len_x, 0, sim.len_y), origin = 'lower')
+    im = ax.imshow(np.flipud(P_sol[0]), extent = (0, sim.len_x, 0, sim.len_y), origin = 'lower', cmap="seismic")
 
     # Initial quiver plot for velocity field:
     skip = int(np.round(3 * N_x / 50))  # reduce number of arrows for clarity and performance
     quiv = ax.quiver(X[::skip, ::skip], Y[::skip, ::skip], U_sol[0][::skip, ::skip], -V_sol[0][::skip, ::skip], 
-                     color = 'white', scale_units = 'xy', scale = quiver_scale)
+                     color = 'black', scale_units = 'xy', scale = quiver_scale)
     
     # Colorbar for pressure values:
     cbar = fig.colorbar(im, ax = ax)
@@ -84,6 +85,10 @@ def animate_simulation(sim: navier_stokes_simulation,
         return [im, quiv]
     
     animation = ani.FuncAnimation(fig, update, frames = len(U_sol), interval = 50)
+    
+    if save is not None:
+        animation.save(save, writer='pillow', fps=20)
+        print(f"Animation saved to {save}")
     
     plt.show()
     
