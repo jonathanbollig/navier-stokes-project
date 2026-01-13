@@ -40,8 +40,10 @@ import pickle
 import os
 import conversions as conv
 import derivatives as deriv
-import pressure as pres
 import plotting as plot
+
+def norm_L2(field: np.array) -> float:
+    return np.sqrt(1 / (field.shape[0] * field.shape[1]) * np.cumsum(np.square(field))[-1])
 
 class navier_stokes_simulation:
     def __init__(self, xn: int, yn: int, len_x: float, len_y: float, x_vel: float,
@@ -92,7 +94,7 @@ class navier_stokes_simulation:
         except ZeroDivisionError:
             y_cond = np.inf
         
-        return self.tau * np.min([cond for cond in [Re_cond, x_cond, y_cond] if cond != 0.0])
+        return self.tau * np.min([Re_cond, x_cond, y_cond])  # removed check if cond != 0.0 since I don't think it should occur.
     
     def calc_F_and_G(self, delta_t: float) -> tuple[np.array, np.array]:
         # Assume (the change in) g_x is negligible:
@@ -112,6 +114,38 @@ class navier_stokes_simulation:
         G[1:-1, 1:-1] = G[1:-1, 1:-1] - delta_t * conv.V_like_from_grid(mixed_deriv)
         
         return F, G
+    
+    def calc_pressure(self, F: np.array, G: np.array, delta_t: float, N_max: int = 100) -> None:
+        # Convert F and G to actual grid points since they refer to different coordinate systems:
+        F_grid: np.array = conv.U_like_to_grid(F)
+        G_grid: np.array = conv.V_like_to_grid(G)
+        RHS: np.array = 1 / delta_t * (deriv.lin_x(F_grid, self.delta_x) + deriv.lin_y(G_grid, self.delta_y))
+        
+        # Convert RHS-array to P-grid since it referred to actual grid:
+        RHS = conv.P_like_from_grid(RHS)
+        
+        P_it: np.array = self.P.copy()
+        P_0_norm: float = norm_L2(self.P)
+        residual_norm: float = self.epsilon * P_0_norm + 1
+        n = 0
+        
+        while residual_norm >= self.epsilon * P_0_norm and n < N_max:
+            P_new: np.array = np.zeros_like(P_it)
+            
+            P_sum: np.array = (P_it[1:-1, 2:] + P_it[1:-1, :-2]) / self.delta_x**2 + (P_it[2:, 1:-1] + P_it[:-2, 1:-1]) / self.delta_y**2
+            P_new[1:-1, 1:-1] = (1 - self.omega) * P_it[1:-1, 1:-1] + self.omega / (2 * (1 / self.delta_x**2 + 1 / self.delta_y**2)) * (P_sum - RHS)
+            
+            # Set boundary values:
+            P_new[0, :], P_new[-1, :] = P_it[1, :], P_it[-2, :]
+            P_new[:, 0], P_new[:, -1] = P_it[:, 1], P_it[:, -2]
+            
+            residual: np.array = deriv.lin_x(P_new, self.delta_x, 2) + deriv.lin_y(P_new, self.delta_y, 2) - RHS
+            residual_norm = norm_L2(residual)
+            
+            P_it = P_new
+            n = n + 1
+
+        self.P = P_it
     
     def apply_boundary_conditions(self,) -> None:
         # U-component (no-slip, except upper boundary where u = x_vel):
@@ -139,7 +173,7 @@ class navier_stokes_simulation:
             delta_t: float = self.calc_timestep()
 
             F, G = self.calc_F_and_G(delta_t)
-            self.P = pres.calc_new_pressure(F, G, self.P, self.delta_x, self.delta_y, delta_t, self.omega, self.epsilon, N_max_P)
+            self.calc_pressure(F, G, delta_t, N_max_P)
 
             self.U[1:-1, 1:-1] = F[1:-1, 1:-1] - delta_t * conv.U_like_from_grid(conv.P_like_to_grid(deriv.lin_x(self.P, self.delta_x)))
             self.V[1:-1, 1:-1] = G[1:-1, 1:-1] - delta_t * conv.V_like_from_grid(conv.P_like_to_grid(deriv.lin_y(self.P, self.delta_y)))
@@ -191,7 +225,10 @@ if __name__ == '__main__':
         simulation.save(filename)
         print(f"Simulation saved to {filename}")
     
+    import matplotlib.pyplot as plt
+    # plt.plot(simulation.t_history)
+    # plt.show()
+    # plotting
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
-    
     animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
