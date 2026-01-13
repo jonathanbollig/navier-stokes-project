@@ -167,7 +167,7 @@ class NavierStokesSolver:
         while t < t_end:
             self.apply_boundary_conditions()
             self.calculate_F_G(dt)
-            mean_rhs, it = self.SOR(dt)
+            it, mean_rhs = self.SOR(dt)
             self.update_velocities(dt)
             t += dt
             
@@ -186,14 +186,100 @@ class NavierStokesSolver:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
+    def plot_last(self):
+        # grid for plot
+        x = np.linspace(0, 1.0, self.nx)
+        y = np.linspace(0, 1.0, self.ny)
+        X, Y = np.meshgrid(x, y)
+
+
+        # set u and v back into the middle
+        u_plot = (self.u[1:-1, 1:-1] + self.u[2:, 1:-1]) / 2
+        v_plot = (self.v[1:-1, 1:-1] + self.v[1:-1, 2:]) / 2
+        # velocity abs value
+        velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
+        
+        plt.contourf(X, Y, velocity_mag.T)
+        plt.colorbar(label='velocity magnitude')
+
+        plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
+        
+        plt.title(f"Lid Driven Cavity (Re={Re}, t={t_end:.2f}s)")
+        plt.xlabel("x")
+        plt.ylabel("y")
+
+        plt.show()    
+
+    def animate_history(self, interval=50, save_path=None):
+        print("diesdas")
+        if len(self.u_history) == 0:
+            print("No history available. Run the simulation first.")
+            return
+        
+        # grid for plot
+        x = np.linspace(0, 1.0, self.nx)
+        y = np.linspace(0, 1.0, self.ny)
+        X, Y = np.meshgrid(x, y)
+        
+        fig, ax = plt.subplots()
+        
+        # Initial frame
+        u = self.u_history[0]
+        v = self.v_history[0]
+        u_plot = (u[1:-1, 1:-1] + u[2:, 1:-1]) / 2
+        v_plot = (v[1:-1, 1:-1] + v[1:-1, 2:]) / 2
+        velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
+        
+        # Compute global velocity range for consistent colorbar
+        all_mags = []
+        for u, v in zip(self.u_history, self.v_history):
+            u_p = (u[1:-1, 1:-1] + u[2:, 1:-1]) / 2
+            v_p = (v[1:-1, 1:-1] + v[1:-1, 2:]) / 2
+            all_mags.append(np.sqrt(u_p**2 + v_p**2))
+        vmin = min(np.min(m) for m in all_mags)
+        vmax = max(np.max(m) for m in all_mags)/10
+        
+        contour = ax.contourf(X, Y, velocity_mag.T, levels=20, vmin=vmin, vmax=vmax)
+        cbar = plt.colorbar(contour, ax=ax, label='velocity magnitude')
+        
+        def update(frame):
+            ax.clear()
+            
+            u = self.u_history[frame]
+            v = self.v_history[frame]
+            
+            u_plot = (u[1:-1, 1:-1] + u[2:, 1:-1]) / 2
+            v_plot = (v[1:-1, 1:-1] + v[1:-1, 2:]) / 2
+            velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
+            
+            ax.contourf(X, Y, velocity_mag.T, levels=20, vmin=vmin, vmax=vmax)
+            ax.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2, color='white')
+            
+            ax.set_title(f"Lid Driven Cavity (Re={self.Re}, frame {frame+1}/{len(self.u_history)})")
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+        
+        animation = ani.FuncAnimation(
+            fig, update, frames=len(self.u_history), 
+            interval=interval, repeat=True
+        )
+        
+        if save_path:
+            animation.save(save_path, writer="pillow", fps=1000//interval)
+            print(f"Animation saved to {save_path}")
+        
+        plt.show()
+        return animation
 
 # lid driven cavity
 if __name__ == "__main__":
 
+    
     dt = 1e-2
-    t_end = 0.1
+    t_end = 0.4
     Re = 100
-    nx, ny = 40, 40
+    nx, ny = 50, 50
+    
     filename = f"lid_driven_n{nx}_re{Re}_t{int(t_end*1000)}_dt{int(dt*1000)}.pkl"
     
     # check if file exists
@@ -205,60 +291,7 @@ if __name__ == "__main__":
         sim.iterate(t_end=t_end, dt=dt)
         sim.save(filename)
 
-    # grid for plot
-    x = np.linspace(0, 1.0, sim.nx)
-    y = np.linspace(0, 1.0, sim.ny)
-    X, Y = np.meshgrid(x, y)
-
-
-    # set u and v back into the middle
-    u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
-    v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
-    # velocity abs value
-    velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
-    
-    plt.contourf(X, Y, velocity_mag.T)
-    plt.colorbar(label='velocity magnitude')
-
-    plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
-    
-    plt.title(f"Lid Driven Cavity (Re={Re}, t={t_end:.2f}s)")
-    plt.xlabel("x")
-    plt.ylabel("y")
-
-    plt.show()
-
-    #fig = plt.figure()
-
-    # def animate(frame):
-    #     steps_per_frame = 30
-    #     for _ in range(steps_per_frame):
-    #         if sim.t < t_end:
-    #             sim.step(dt, sim.t)
-    #             sim.t += dt
-    #             max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
-    #             print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
-    #         else:
-    #             animation.event_source.stop()    
-
-    #     # set u and v back into the middle
-    #     u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
-    #     v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
-    #     # velocity abs value
-    #     velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
-        
-        
-    #     plt.contourf(X, Y, velocity_mag.T)
-    #     plt.colorbar(label='velocity magnitude')
-
-    #     plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
-        
-    #     plt.title(f"Lid Driven Cavity (Re={sim.Re}, t={sim.t:.2f}s)")
-    #     plt.xlabel("x")
-    #     plt.ylabel("y")
-    #     plt.clf()
-
-
-    # animation = ani.FuncAnimation(fig, animate, interval = 50, cache_frame_data=False)
-    #animation.save("lid_driven_cavity.gif", writer="pillow", fps=15)
-    
+    # sim.plot_last()
+    print("was?")
+    sim.animate_history(interval=50, save_path=None)
+ 
