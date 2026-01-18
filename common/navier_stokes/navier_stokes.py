@@ -204,12 +204,12 @@ if __name__ == '__main__':
     x_vel: float = 2
 
     # variables:
-    nx: int = 70
-    ny: int = 70
+    nx: int = 50
+    ny: int = 50
     len_x: float = 1
     len_y: float = 1
-    Re: float = 500
-    T_max: float = 7
+    Re: float = 200
+    T_max: float = 10
     
     filename: str = f"lid_driven_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
     
@@ -219,16 +219,19 @@ if __name__ == '__main__':
         with open(filename, 'rb') as f:
             simulation = pickle.load(f)
     else:
-        print(f"Running new simulation...")
+        print("Running new simulation...")
         simulation = navier_stokes_simulation(nx, ny, len_x, len_y, x_vel, Re, tau, omega, epsilon)
         simulation.iterate(t_end=T_max)
         simulation.save(filename)
         print(f"Simulation saved to {filename}")
     
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
     # plt.plot(simulation.t_history)
     # plt.show()
     # plotting
-    plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
-    quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
-    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
+    
+    # plot_log_vel = False # False # enable logarithmic scaling of velocity vectors
+    # quiver_scale = 8     # 8     # adjust length of plotted arrows (smaller -> longer)
+    # animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
+    
+    plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])

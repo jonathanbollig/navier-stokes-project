@@ -5,9 +5,11 @@ Created on Sun Jan 11 19:52:56 2026
 @author: Jan
 """
 
+from matplotlib import colormaps
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 import numpy as np
+from typing import Any
 
 import conversions as conv
 
@@ -125,3 +127,71 @@ def animate_solution(solutions: list[list[np.array], list[float]], domain_size: 
     plt.show()
     
     return animation
+
+
+def streamlines_and_magnitudes(solutions: list[list[np.array], list[float]], plot_times: list[float],
+                               domain_size: list[float], plot_params: dict[str: Any] = {}, 
+                               save_params: dict[str: Any] = None) -> None:
+    # Initialize solution arrays:
+    U_sol = solutions[0]
+    V_sol = solutions[1]
+    t_sol = solutions[3]
+    
+    for i in range(len(U_sol)):
+        U_sol[i] = conv.U_like_to_grid(U_sol[i])
+        V_sol[i] = conv.V_like_to_grid(V_sol[i])
+    
+    # Find the indices in the solutions lists that correspond to the timestep that comes immediately after each of the requested plot times:
+    current_time_index: int = 0
+    plot_time_indices: list[int] = []
+    plot_times.sort()
+    plot_times = list(tuple(plot_times))
+    
+    for index, time in enumerate(t_sol):
+        if time >= plot_times[current_time_index]:
+            plot_time_indices.append(index)
+            
+            current_time_index = current_time_index + 1
+            
+        if current_time_index == len(plot_times):
+            break
+        
+    # Plot streamlines and velocity magnitudes of all requested time steps:    
+    a, b = domain_size
+    N_x, N_y = U_sol[0].shape
+    
+    X, Y = np.meshgrid(np.linspace(0, a, N_x), np.linspace(0, b, N_y))
+        
+    for plot_index in plot_time_indices:
+        U: np.array = U_sol[plot_index]
+        V: np.array = V_sol[plot_index]
+        t: float = t_sol[plot_index]
+        
+        M: np.array = np.sqrt(np.square(U) + np.square(V))
+        
+        plt.figure(figsize = plot_params.get('figsize', (7, 7)))
+        
+        # Contour plot of velocity magnitude:
+        plt.contourf(X, Y, M, 
+                     levels = plot_params.get('contour levels', 50), 
+                     cmap = plot_params.get('cmap', colormaps['jet']))
+        
+        # Streamplot of stream lines:
+        plt.streamplot(X, Y, U, V, 
+                       color = plot_params.get('streamline color', 'white'), 
+                       density = plot_params.get('streamline density', 1.5), 
+                       linewidth = plot_params.get('streamline linewidth', 0.7))
+        
+        plt.xlim(0, a)
+        plt.ylim(b, 0) # invert y-limits so that plot is right side up
+        
+        plt.title(f"Grid: ({N_x}, {N_y})\n" + f"t = {t:.2f}")
+        
+        plt.xlabel('x')
+        plt.ylabel('y')
+        
+        if save_params != None:
+            title: str = save_params['title'] + f'_t{t:.1f}.png'
+            plt.savefig(title, dpi = save_params.get('dpi', 200))
+        
+        plt.show()
