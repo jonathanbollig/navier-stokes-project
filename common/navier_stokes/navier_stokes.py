@@ -231,5 +231,5 @@ if __name__ == '__main__':
     # plotting
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
-    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
-    # plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
+    # animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
+    plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])

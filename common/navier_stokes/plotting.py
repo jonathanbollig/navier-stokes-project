@@ -9,15 +9,15 @@ from matplotlib import colormaps
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 import numpy as np
-from typing import Any
+from typing import Any, Optional
 
 from navier_stokes import navier_stokes_simulation
 import conversions as conv
 
 def animate_simulation(sim: navier_stokes_simulation, 
-                     quiver_scale: float = None, plot_log_vel: bool = False,
-                     log_vel_exp: float = 2, frame_skip: int = None, save: str = None) -> ani.FuncAnimation:
-    if frame_skip == None:
+                     quiver_scale: Optional[float] = None, plot_log_vel: bool = False,
+                     log_vel_exp: float = 2, frame_skip: Optional[int] = None, save: Optional[str] = None) -> ani.FuncAnimation:
+    if frame_skip is None:
         # frame_skip: int = len(solutions[0]) / 100
         frame_skip = 20
     
@@ -35,11 +35,11 @@ def animate_simulation(sim: navier_stokes_simulation,
         # Convert velocity vectors to logarithmic scale for better visualization:
         if plot_log_vel:
             
-            M: np.array = np.sqrt(U_sol[i]**2 + V_sol[i]**2)
+            M: np.ndarray = np.sqrt(U_sol[i]**2 + V_sol[i]**2)
             
             # Add small value epsilon to avoid log(0):
             epsilon = 1e-10
-            log_M: np.array = np.log2(M + epsilon)
+            log_M: np.ndarray = np.log2(M + epsilon)
             
             # Normalize log magnitudes to a positive scale for better visualization:
             log_M_norm = (log_M - log_M.min()) / (log_M.max() - log_M.min())
@@ -96,8 +96,8 @@ def animate_simulation(sim: navier_stokes_simulation,
 
 
 def streamlines_and_magnitudes(sim: navier_stokes_simulation, plot_times: list[float],
-                               domain_size: list[float], plot_params: dict[str: Any] = {}, 
-                               save_params: dict[str: Any] = None) -> None:
+                               domain_size: list[float], plot_params: dict = {}, 
+                               save_params: Optional[dict] = None) -> None:
     # Initialize solution arrays:
     U_sol = sim.u_history
     V_sol = sim.v_history
@@ -129,11 +129,11 @@ def streamlines_and_magnitudes(sim: navier_stokes_simulation, plot_times: list[f
     X, Y = np.meshgrid(np.linspace(0, a, N_x), np.linspace(0, b, N_y))
         
     for plot_index in plot_time_indices:
-        U: np.array = U_sol[plot_index]
-        V: np.array = V_sol[plot_index]
+        U: np.ndarray = U_sol[plot_index]
+        V: np.ndarray = V_sol[plot_index]
         t: float = t_sol[plot_index]
         
-        M: np.array = np.sqrt(np.square(U) + np.square(V))
+        M: np.ndarray = np.sqrt(np.square(U) + np.square(V))
         
         plt.figure(figsize = plot_params.get('figsize', (7, 7)))
         
