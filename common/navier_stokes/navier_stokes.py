@@ -151,8 +151,15 @@ class navier_stokes_simulation:
     
     def apply_boundary_condition(self, side: Literal['left', 'right', 'top', 'bottom'],
                                  U_val: float = 0, V_val: float = 0,
-                                 start_val=0, end_val=-1) -> None:
+                                 start_val=0, end_val=-1, terminate_rekursion=False) -> None:
         a, b = start_val, end_val  # shorthand
+        
+        # trick to first apply normal boundary condition to other parts
+        # for some reason the simulation worked without this part. Not sure if that was coincidence, but to be sure added this part.
+        if not terminate_rekursion:   
+            self.apply_boundary_condition(side, 0, 0, 0, a, True) 
+            self.apply_boundary_condition(side, 0, 0, b, -1, True) 
+
         if side == 'left':
             self.U[a:b, 0] = U_val
             self.V[a:b, 0] = V_val*2 - self.V[a:b, 1]
@@ -237,7 +244,7 @@ if __name__ == '__main__':
     len_x: float = 1
     len_y: float = 1
     Re: float = 2000
-    T_max: float = 15
+    T_max: float = 5
     type_: str = "s_channel"
 
     """
@@ -259,8 +266,8 @@ if __name__ == '__main__':
         print("Running new simulation...")
         simulation = navier_stokes_simulation(nx, ny, len_x, len_y, x_vel, Re, tau, omega, epsilon)
         simulation.iterate(t_end=T_max, type_=type_)
-        simulation.save(filename)
-        print(f"Simulation saved to {filename}")
+        # simulation.save(filename)
+        # print(f"Simulation saved to {filename}")
     
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
