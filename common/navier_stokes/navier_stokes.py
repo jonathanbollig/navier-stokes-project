@@ -165,32 +165,31 @@ class navier_stokes_simulation:
         else:
             raise ValueError("side must be one of 'left', 'right', 'top', 'bottom'")
         
-    def apply_boundary_conditions_new(self,) -> None:
-        self.apply_boundary_condition('left')
-        self.apply_boundary_condition('right')
-        self.apply_boundary_condition('top', U_val=self.x_vel)
-        self.apply_boundary_condition('bottom')
+    def apply_boundary_conditions(self, type_: str = "lid") -> None:
+        if type_ == "lid":
+            self.apply_boundary_condition('left')
+            self.apply_boundary_condition('right')
+            self.apply_boundary_condition('top', U_val=self.x_vel)
+            self.apply_boundary_condition('bottom')
+        if type_ == "lid_floor":
+            self.apply_boundary_condition('left')
+            self.apply_boundary_condition('right')
+            self.apply_boundary_condition('top', U_val=self.x_vel)
+            self.apply_boundary_condition('bottom', U_val=self.x_vel)
+        if type_ == "channel":
+            self.apply_boundary_condition('left', U_val=self.x_vel)
+            self.apply_boundary_condition('right', U_val=self.x_vel)
+            self.apply_boundary_condition('top')
+            self.apply_boundary_condition('bottom')
 
-
-    def apply_boundary_conditions(self,) -> None:
-        # U-component (no-slip, except upper boundary where u = x_vel):
-        self.U[:, 0], self.U[:, -1] = 0, 0
-        self.U[0, :] = 2 * self.x_vel * np.ones_like(self.U[0, :]) - self.U[1, :]
-        self.U[-1, :] = -1 * self.U[-2, :]
-        
-        # V-component (no-slip):
-        self.V[0, :], self.V[-1, :] = 0, 0
-        self.V[:, 0] = -1 * self.V[:, 1]
-        self.V[:, -1] = -1 * self.V[:, -2]
-        
-    def iterate(self, t_end: float, N_max_P: int = 100) -> None:
+    def iterate(self, t_end: float, N_max_P: int = 100, type_:str = "lid") -> None:
         # Print a message at certain timesteps to track progress:
         print_times: np.ndarray = np.linspace(0, t_end, 20)
         print_index: int = 0
 
         t: float = 0
         while t < t_end:
-            self.apply_boundary_conditions_new()
+            self.apply_boundary_conditions(type_)
             delta_t: float = self.calc_timestep()
 
             F, G = self.calc_F_and_G(delta_t)
@@ -229,10 +228,18 @@ if __name__ == '__main__':
     ny: int = 50
     len_x: float = 1
     len_y: float = 1
-    Re: float = 200
+    Re: float = 2000
     T_max: float = 15
+    type_: str = "channel"  # to distinguish different simulation files if needed
+
+    """
+    current types:
+    "lid"      : standard lid-driven cavity
+    "lid_floor": both top and bottom walls move with lid velocity
+    "channel"  : left and right walls move with x_vel velocity
+    """
     
-    filename: str = f"lid_driven_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
+    filename: str = f"{type_}_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
     
     # Check if file exists
     if os.path.exists(filename):
@@ -242,7 +249,7 @@ if __name__ == '__main__':
     else:
         print("Running new simulation...")
         simulation = navier_stokes_simulation(nx, ny, len_x, len_y, x_vel, Re, tau, omega, epsilon)
-        simulation.iterate(t_end=T_max)
+        simulation.iterate(t_end=T_max, type_=type_)
         simulation.save(filename)
         print(f"Simulation saved to {filename}")
     
