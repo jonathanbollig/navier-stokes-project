@@ -138,9 +138,12 @@ def streamlines_and_magnitudes(sim: navier_stokes_simulation, plot_times: list[f
         plt.figure(figsize = plot_params.get('figsize', (7, 7)))
         
         # Contour plot of velocity magnitude:
-        plt.contourf(X, Y, M, 
+        contour = plt.contourf(X, Y, M, 
                      levels = plot_params.get('contour levels', 50), 
                      cmap = plot_params.get('cmap', colormaps['jet']))
+        
+        # Add colorbar for velocity magnitude:
+        plt.colorbar(contour, label='Velocity Magnitude')
         
         # Streamplot of stream lines:
         plt.streamplot(X, Y, U, V, 

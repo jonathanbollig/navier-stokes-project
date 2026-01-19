@@ -149,19 +149,22 @@ class navier_stokes_simulation:
 
         self.P = P_it
     
-    def apply_boundary_condition(self, side: Literal['left', 'right', 'top', 'bottom'], U_val: float = 0, V_val: float = 0) -> None:
+    def apply_boundary_condition(self, side: Literal['left', 'right', 'top', 'bottom'],
+                                 U_val: float = 0, V_val: float = 0,
+                                 start_val=0, end_val=-1) -> None:
+        a, b = start_val, end_val  # shorthand
         if side == 'left':
-            self.U[:, 0] = U_val
-            self.V[:, 0] = V_val*2 - self.V[:, 1]
+            self.U[a:b, 0] = U_val
+            self.V[a:b, 0] = V_val*2 - self.V[a:b, 1]
         elif side == 'right':
-            self.U[:, -1] = U_val
-            self.V[:, -1] = V_val*2 - self.V[:, -2]
+            self.U[a:b, -1] = U_val
+            self.V[a:b, -1] = V_val*2 - self.V[a:b, -2]
         elif side == 'top':
-            self.U[0, :] = U_val*2 - self.U[1, :]
-            self.V[0, :] = V_val
+            self.U[0, a:b] = U_val*2 - self.U[1, a:b]
+            self.V[0, a:b] = V_val
         elif side == 'bottom':
-            self.U[-1, :] = U_val*2 - self.U[-2, :]
-            self.V[-1, :] = V_val
+            self.U[-1, a:b] = U_val*2 - self.U[-2, a:b]
+            self.V[-1, a:b] = V_val
         else:
             raise ValueError("side must be one of 'left', 'right', 'top', 'bottom'")
         
@@ -179,6 +182,11 @@ class navier_stokes_simulation:
         if type_ == "channel":
             self.apply_boundary_condition('left', U_val=self.x_vel)
             self.apply_boundary_condition('right', U_val=self.x_vel)
+            self.apply_boundary_condition('top')
+            self.apply_boundary_condition('bottom')
+        if type_ == "s_channel":
+            self.apply_boundary_condition('left', U_val=self.x_vel, start_val=int(self.yn/2))
+            self.apply_boundary_condition('right', U_val=self.x_vel, end_val=int(self.yn/2))
             self.apply_boundary_condition('top')
             self.apply_boundary_condition('bottom')
 
@@ -230,13 +238,14 @@ if __name__ == '__main__':
     len_y: float = 1
     Re: float = 2000
     T_max: float = 15
-    type_: str = "channel"  # to distinguish different simulation files if needed
+    type_: str = "s_channel"
 
     """
     current types:
     "lid"      : standard lid-driven cavity
     "lid_floor": both top and bottom walls move with lid velocity
     "channel"  : left and right walls move with x_vel velocity
+    "s_channel": left wall moves with x_vel in upper half, right wall moves with x_vel in lower half
     """
     
     filename: str = f"{type_}_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
