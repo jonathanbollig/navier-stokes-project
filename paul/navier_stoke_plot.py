@@ -4,7 +4,7 @@ import matplotlib.animation as animation
 from matplotlib.colors import SymLogNorm
 
 #load data
-data = np.load('sim_data_Re4000_t20_nx100_ny100.npz')
+data = np.load('sim_data_Re4000_t20.0_nx50_ny50_obstaclecircle.npz')
 u_data = data['u']
 v_data = data['v']
 t_data = data['t']
@@ -31,6 +31,11 @@ u_plot = (u[0:-2, 1:-1] + u[1:-1, 1:-1]) / 2
 v_plot = (v[1:-1, 0:-2] + v[1:-1, 1:-1]) / 2
 p_plot = p[1:-1, 1:-1]
 
+# box_mask = (X >= 0.25) & (X <= 0.75) & (Y >= 0.25) & (Y <= 0.75)
+
+
+# u_plot = np.ma.masked_where(box_mask, u_plot)
+# v_plot = np.ma.masked_where(box_mask, v_plot)
 #plot
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12,5))
 

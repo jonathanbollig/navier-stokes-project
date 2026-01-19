@@ -16,10 +16,10 @@ class NavierStokesSolver:
         self.obstacle = obstacle
 
         if self.obstacle == "circle":
-            radius = 10
-            x_mid = int(self.nx/2)
-            y_mid = int(self.ny/2)
-            x,y = np.ogrid[:self.nx,:self.ny]
+            radius = 5
+            x_mid = int((self.nx+1)/2 )
+            y_mid = int((self.ny+1)/2 )
+            x,y = np.ogrid[:self.nx + 2,:self.ny + 2]
             self.circle_mask = (x-x_mid)**2 + (y-y_mid)**2 <= radius**2
         
         # arrays with ghost cells
@@ -150,7 +150,7 @@ class NavierStokesSolver:
         if norm_p < 1e-10:
             norm_p = 1
         tolerance = max(epsilon * norm_p, 1e-4)
-        omega = 1.7 # relaxation factor
+        omega = 1.8 # relaxation factor
 
         residual_norm = tolerance * 2
         
@@ -206,7 +206,7 @@ class NavierStokesSolver:
 
 # lid driven cavity
 if __name__ == "__main__":
-    sim = NavierStokesSolver(nx=200, ny=200, len_x=1.0, len_y=1.0, Re=4000)
+    sim = NavierStokesSolver(nx=50, ny=50, len_x=1.0, len_y=1.0, Re=4000, obstacle= "circle")
 
     sim.t = 0
     t_end = 20
@@ -233,7 +233,7 @@ if __name__ == "__main__":
             p_data.append(sim.p.copy())
             t_data.append(sim.t.copy())
 
-    filename = f"sim_data_Re{sim.Re}_t{sim.t}_nx{sim.nx}_ny{sim.ny}"
+    filename = f"sim_data_Re{sim.Re}_t{sim.t:.1f}_nx{sim.nx}_ny{sim.ny}_obstacle{sim.obstacle}"
 
     np.savez_compressed(
         filename, 
