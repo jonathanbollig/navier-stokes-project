@@ -42,6 +42,8 @@ import conversions as conv
 import derivatives as deriv
 import plotting as plot
 
+from typing import Literal
+
 def norm_L2(field: np.ndarray) -> float:
     return np.sqrt(1 / (field.shape[0] * field.shape[1]) * np.cumsum(np.square(field))[-1])
 
@@ -147,6 +149,29 @@ class navier_stokes_simulation:
 
         self.P = P_it
     
+    def apply_boundary_condition(self, side: Literal['left', 'right', 'top', 'bottom'], U_val: float = 0, V_val: float = 0) -> None:
+        if side == 'left':
+            self.U[:, 0] = U_val
+            self.V[:, 0] = V_val*2 - self.V[:, 1]
+        elif side == 'right':
+            self.U[:, -1] = U_val
+            self.V[:, -1] = V_val*2 - self.V[:, -2]
+        elif side == 'top':
+            self.U[0, :] = U_val*2 - self.U[1, :]
+            self.V[0, :] = V_val
+        elif side == 'bottom':
+            self.U[-1, :] = U_val*2 - self.U[-2, :]
+            self.V[-1, :] = V_val
+        else:
+            raise ValueError("side must be one of 'left', 'right', 'top', 'bottom'")
+        
+    def apply_boundary_conditions_new(self,) -> None:
+        self.apply_boundary_condition('left')
+        self.apply_boundary_condition('right')
+        self.apply_boundary_condition('top', U_val=self.x_vel)
+        self.apply_boundary_condition('bottom')
+
+
     def apply_boundary_conditions(self,) -> None:
         # U-component (no-slip, except upper boundary where u = x_vel):
         self.U[:, 0], self.U[:, -1] = 0, 0
@@ -158,10 +183,6 @@ class navier_stokes_simulation:
         self.V[:, 0] = -1 * self.V[:, 1]
         self.V[:, -1] = -1 * self.V[:, -2]
         
-        # Pressure (no-slip):
-        self.P[:, 0], self.P[:, -1] = -1 * self.P[:, 1], -1 * self.P[:, -2]
-        self.P[0, :], self.P[-1, :] = -1 * self.P[1, :], -1 * self.P[-2, :]
-        
     def iterate(self, t_end: float, N_max_P: int = 100) -> None:
         # Print a message at certain timesteps to track progress:
         print_times: np.ndarray = np.linspace(0, t_end, 20)
@@ -169,7 +190,7 @@ class navier_stokes_simulation:
 
         t: float = 0
         while t < t_end:
-            self.apply_boundary_conditions()
+            self.apply_boundary_conditions_new()
             delta_t: float = self.calc_timestep()
 
             F, G = self.calc_F_and_G(delta_t)
@@ -208,7 +229,7 @@ if __name__ == '__main__':
     ny: int = 50
     len_x: float = 1
     len_y: float = 1
-    Re: float = 100
+    Re: float = 200
     T_max: float = 15
     
     filename: str = f"lid_driven_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
@@ -225,10 +246,6 @@ if __name__ == '__main__':
         simulation.save(filename)
         print(f"Simulation saved to {filename}")
     
-    # import matplotlib.pyplot as plt
-    # plt.plot(simulation.t_history)
-    # plt.show()
-    # plotting
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
     # animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
