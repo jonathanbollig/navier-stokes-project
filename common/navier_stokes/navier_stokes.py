@@ -42,7 +42,7 @@ import conversions as conv
 import derivatives as deriv
 import plotting as plot
 
-def norm_L2(field: np.array) -> float:
+def norm_L2(field: np.ndarray) -> float:
     return np.sqrt(1 / (field.shape[0] * field.shape[1]) * np.cumsum(np.square(field))[-1])
 
 class navier_stokes_simulation:
@@ -67,14 +67,14 @@ class navier_stokes_simulation:
             self.x_vel: float = x_vel  # velocity of the lid (top boundary)
             
             # Initializing field arrays:
-            self.U: np.array = np.zeros(shape = (self.yn + 1, self.xn))
-            self.V: np.array = np.zeros(shape = (self.yn, self.xn + 1))
-            self.P: np.array = np.zeros(shape = (self.yn + 1, self.xn + 1))
+            self.U: np.ndarray = np.zeros(shape = (self.yn + 1, self.xn))
+            self.V: np.ndarray = np.zeros(shape = (self.yn, self.xn + 1))
+            self.P: np.ndarray = np.zeros(shape = (self.yn + 1, self.xn + 1))
             
             # History storage:
-            self.u_history: list[np.array] = []
-            self.v_history: list[np.array] = []
-            self.p_history: list[np.array] = []
+            self.u_history: list[np.ndarray] = []
+            self.v_history: list[np.ndarray] = []
+            self.p_history: list[np.ndarray] = []
             self.t_history: list[float] = []
     
     def calc_timestep(self) -> float:
@@ -86,27 +86,27 @@ class navier_stokes_simulation:
         except ZeroDivisionError:
             Re_cond = np.inf
         try:
-            x_cond: float = self.delta_x / np.abs(np.max(self.U))
+            x_cond: float = self.delta_x / np.max(np.abs(self.U))
         except ZeroDivisionError:
             x_cond = np.inf
         try:
-            y_cond: float = self.delta_y / np.abs(np.max(self.V))
+            y_cond: float = self.delta_y / np.max(np.abs(self.V))
         except ZeroDivisionError:
             y_cond = np.inf
         
         return self.tau * np.min([Re_cond, x_cond, y_cond])  # removed check if cond != 0.0 since I don't think it should occur.
     
-    def calc_F_and_G(self, delta_t: float) -> tuple[np.array, np.array]:
+    def calc_F_and_G(self, delta_t: float) -> tuple[np.ndarray, np.ndarray]:
         # Assume (the change in) g_x is negligible:
-        F: np.array = self.U.copy()
+        F: np.ndarray = self.U.copy()
         F[1:-1, 1:-1] = F[1:-1, 1:-1] + delta_t / self.Re * (deriv.lin_x(self.U, self.delta_x, 2) + deriv.lin_y(self.U, self.delta_y, 2))
         F[1:-1, 1:-1] = F[1:-1, 1:-1] - delta_t * deriv.nonlin_x(self.U, self.V, self.delta_x, self.delta_y, delta_t, deriv.NonlinType.SQUARE)
         
-        mixed_deriv: np.array = deriv.nonlin_y(self.U, self.V, self.delta_x, self.delta_y, delta_t, deriv.NonlinType.MIXED)
+        mixed_deriv: np.ndarray = deriv.nonlin_y(self.U, self.V, self.delta_x, self.delta_y, delta_t, deriv.NonlinType.MIXED)
         F[1:-1, 1:-1] = F[1:-1, 1:-1] - delta_t * conv.U_like_from_grid(mixed_deriv)
         
         # Assume (the change in) g_y is negligible:
-        G: np.array = self.V.copy()
+        G: np.ndarray = self.V.copy()
         G[1:-1, 1:-1] = G[1:-1, 1:-1] + delta_t / self.Re * (deriv.lin_x(self.V, self.delta_x, 2) + deriv.lin_y(self.V, self.delta_y, 2))
         G[1:-1, 1:-1] = G[1:-1, 1:-1] - delta_t * deriv.nonlin_y(self.U, self.V, self.delta_x, self.delta_y, delta_t, deriv.NonlinType.SQUARE)
         
@@ -115,31 +115,31 @@ class navier_stokes_simulation:
         
         return F, G
     
-    def calc_pressure(self, F: np.array, G: np.array, delta_t: float, N_max: int = 100) -> None:
+    def calc_pressure(self, F: np.ndarray, G: np.ndarray, delta_t: float, N_max: int = 100) -> None:
         # Convert F and G to actual grid points since they refer to different coordinate systems:
-        F_grid: np.array = conv.U_like_to_grid(F)
-        G_grid: np.array = conv.V_like_to_grid(G)
-        RHS: np.array = 1 / delta_t * (deriv.lin_x(F_grid, self.delta_x) + deriv.lin_y(G_grid, self.delta_y))
+        F_grid: np.ndarray = conv.U_like_to_grid(F)
+        G_grid: np.ndarray = conv.V_like_to_grid(G)
+        RHS: np.ndarray = 1 / delta_t * (deriv.lin_x(F_grid, self.delta_x) + deriv.lin_y(G_grid, self.delta_y))
         
         # Convert RHS-array to P-grid since it referred to actual grid:
         RHS = conv.P_like_from_grid(RHS)
         
-        P_it: np.array = self.P.copy()
+        P_it: np.ndarray = self.P.copy()
         P_0_norm: float = norm_L2(self.P)
         residual_norm: float = self.epsilon * P_0_norm + 1
         n = 0
         
         while residual_norm >= self.epsilon * P_0_norm and n < N_max:
-            P_new: np.array = np.zeros_like(P_it)
+            P_new: np.ndarray = np.zeros_like(P_it)
             
-            P_sum: np.array = (P_it[1:-1, 2:] + P_it[1:-1, :-2]) / self.delta_x**2 + (P_it[2:, 1:-1] + P_it[:-2, 1:-1]) / self.delta_y**2
+            P_sum: np.ndarray = (P_it[1:-1, 2:] + P_it[1:-1, :-2]) / self.delta_x**2 + (P_it[2:, 1:-1] + P_it[:-2, 1:-1]) / self.delta_y**2
             P_new[1:-1, 1:-1] = (1 - self.omega) * P_it[1:-1, 1:-1] + self.omega / (2 * (1 / self.delta_x**2 + 1 / self.delta_y**2)) * (P_sum - RHS)
             
             # Set boundary values:
             P_new[0, :], P_new[-1, :] = P_it[1, :], P_it[-2, :]
             P_new[:, 0], P_new[:, -1] = P_it[:, 1], P_it[:, -2]
             
-            residual: np.array = deriv.lin_x(P_new, self.delta_x, 2) + deriv.lin_y(P_new, self.delta_y, 2) - RHS
+            residual: np.ndarray = deriv.lin_x(P_new, self.delta_x, 2) + deriv.lin_y(P_new, self.delta_y, 2) - RHS
             residual_norm = norm_L2(residual)
             
             P_it = P_new
@@ -164,7 +164,7 @@ class navier_stokes_simulation:
         
     def iterate(self, t_end: float, N_max_P: int = 100) -> None:
         # Print a message at certain timesteps to track progress:
-        print_times: list[float] = np.linspace(0, t_end, 20)
+        print_times: np.ndarray = np.linspace(0, t_end, 20)
         print_index: int = 0
 
         t: float = 0
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     ny: int = 50
     len_x: float = 1
     len_y: float = 1
-    Re: float = 500
+    Re: float = 100
     T_max: float = 15
     
     filename: str = f"lid_driven_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
