@@ -5,7 +5,7 @@ import numpy as np
 import numpy as np
 
 class NavierStokesSolver:
-    def __init__(self, nx, ny, len_x, len_y, Re, gx=0.0, gy=0.0):
+    def __init__(self, nx, ny, len_x, len_y, Re, gx=0.0, gy=0.0, obstacle = "none"):
         self.nx, self.ny = nx, ny
         self.dx = len_x / nx
         self.dy = len_y / ny
@@ -13,6 +13,14 @@ class NavierStokesSolver:
         self.gx, self.gy = gx, gy
         self.gamma = 0.9 # weighting factor (eq. 38)
         self.t = 0
+        self.obstacle = obstacle
+
+        if self.obstacle == "circle":
+            radius = 10
+            x_mid = int(self.nx/2)
+            y_mid = int(self.ny/2)
+            x,y = np.ogrid[:self.nx,:self.ny]
+            self.circle_mask = (x-x_mid)**2 + (y-y_mid)**2 <= radius**2
         
         # arrays with ghost cells
         self.u = np.zeros((nx + 2, ny + 2))
@@ -35,6 +43,20 @@ class NavierStokesSolver:
         self.v[-1, :] = -self.v[-2, :]
         self.v[:, 0] = 0  
         self.v[:, -1] = 0
+        if self.obstacle == "none":
+            pass
+
+        elif self.obstacle == "box":
+            self.v[int(self.nx/4):int(3*self.nx/4), int(self.ny/4):int(3*self.ny/4)] = 0
+            self.u[int(self.nx/4):int(3*self.nx/4), int(self.ny/4):int(3*self.ny/4)] = 0
+        
+        elif self.obstacle == "circle":
+            self.u[self.circle_mask] = 0
+            self.v[self.circle_mask] = 0
+
+        else:
+            print("Unknown obstacle")
+
 
 
 
@@ -175,19 +197,54 @@ class NavierStokesSolver:
         print("p:", np.min(self.p))
         self.update_velocities(dt)
 
+    def adaptive_dt(self, tau):
+        con1 = self.Re / (2 * (self.dx ** (-2) + self.dy ** (-2)))
+        con2 = self.dx / max(np.max(np.abs(self.u)), 1e-5)
+        con3 = self.dx / max(np.max(np.abs(self.v)), 1e-5)
+        dt = tau * min(con1, con2, con3)
+        return dt
+
 # lid driven cavity
 if __name__ == "__main__":
-    sim = NavierStokesSolver(nx=40, ny=40, len_x=1.0, len_y=1.0, Re=100)
+    sim = NavierStokesSolver(nx=200, ny=200, len_x=1.0, len_y=1.0, Re=4000)
 
     sim.t = 0
-    t_end = 0.1
-    dt = 1e-2
+    t_end = 20
+    tau = 0.8
+    step_count = 0
+    save_step = 10
+
+    u_data = []
+    v_data = []
+    p_data = []
+    t_data = []
 
     while sim.t < t_end:
+        dt = sim.adaptive_dt(tau)
         sim.step(dt, sim.t)
         sim.t += dt
+        step_count += 1
         max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
         print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
+
+        if step_count % save_step == 0:
+            u_data.append(sim.u.copy())
+            v_data.append(sim.v.copy())
+            p_data.append(sim.p.copy())
+            t_data.append(sim.t.copy())
+
+    filename = f"sim_data_Re{sim.Re}_t{sim.t}_nx{sim.nx}_ny{sim.ny}"
+
+    np.savez_compressed(
+        filename, 
+        u=np.array(u_data), 
+        v=np.array(v_data), 
+        p=np.array(p_data),
+        t=np.array(t_data),
+        nx=sim.nx, 
+        ny=sim.ny,
+        Re=sim.Re
+    )
 
     # grid for plot
     x = np.linspace(0, 1.0, sim.nx)
@@ -196,13 +253,13 @@ if __name__ == "__main__":
 
 
     # set u and v back into the middle
-    u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
-    v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
+    u_plot = (sim.u[:-2, 1:-1] + sim.u[1:-1, 1:-1]) / 2
+    v_plot = (sim.v[1:-1, :-2] + sim.v[1:-1, 1:-1]) / 2
     # velocity abs value
     velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
     
     
-    plt.contourf(X, Y, velocity_mag.T)
+    plt.contourf(X, Y, velocity_mag.T, levels=20)
     plt.colorbar(label='velocity magnitude')
 
     plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
@@ -212,38 +269,3 @@ if __name__ == "__main__":
     plt.ylabel("y")
 
     plt.show()
-
-    #fig = plt.figure()
-
-    # def animate(frame):
-    #     steps_per_frame = 30
-    #     for _ in range(steps_per_frame):
-    #         if sim.t < t_end:
-    #             sim.step(dt, sim.t)
-    #             sim.t += dt
-    #             max_u = np.max(np.abs(sim.u[1:-1,1:-1]))
-    #             print(f"Zeit: {sim.t:.3f}, Max U: {max_u:.4f}")
-    #         else:
-    #             animation.event_source.stop()    
-
-    #     # set u and v back into the middle
-    #     u_plot = (sim.u[1:-1, 1:-1] + sim.u[2:, 1:-1]) / 2
-    #     v_plot = (sim.v[1:-1, 1:-1] + sim.v[1:-1, 2:]) / 2
-    #     # velocity abs value
-    #     velocity_mag = np.sqrt(u_plot**2 + v_plot**2)
-        
-        
-    #     plt.contourf(X, Y, velocity_mag.T)
-    #     plt.colorbar(label='velocity magnitude')
-
-    #     plt.streamplot(X, Y, u_plot.T, v_plot.T, linewidth=0.5, density=2)
-        
-    #     plt.title(f"Lid Driven Cavity (Re={sim.Re}, t={sim.t:.2f}s)")
-    #     plt.xlabel("x")
-    #     plt.ylabel("y")
-    #     plt.clf()
-
-
-    # animation = ani.FuncAnimation(fig, animate, interval = 50, cache_frame_data=False)
-    #animation.save("lid_driven_cavity.gif", writer="pillow", fps=15)
-    
