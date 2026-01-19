@@ -14,9 +14,44 @@ from typing import Any, Optional
 from navier_stokes import navier_stokes_simulation
 import conversions as conv
 
+def draw_boxes(ax: plt.Axes, sim: navier_stokes_simulation) -> None:  # type: ignore
+    """
+    Draw black rectangles on the axes for each box in sim.boxes.
+    
+    Parameters:
+    -----------
+    ax : plt.Axes
+        The matplotlib axes to draw on
+    sim : navier_stokes_simulation
+        The simulation object containing boxes and grid information
+    """
+    if not hasattr(sim, 'boxes') or not sim.boxes:
+        return
+    
+    # Convert grid indices to physical coordinates
+    dx = sim.len_x / sim.xn
+    dy = sim.len_y / sim.yn
+    
+    for box in sim.boxes:
+        # box format: [start_x, end_x, start_y, end_y] in grid indices
+        x_start = box[0] * dx
+        x_end = box[1] * dx
+        y_start = box[2] * dy
+        y_end = box[3] * dy
+        
+        width = x_end - x_start
+        height = y_end - y_start
+        
+        # Add a black filled rectangle
+        rect = plt.Rectangle((x_start, y_start), width, height,   # type: ignore
+                            facecolor='black', edgecolor='black', 
+                            linewidth=0, zorder=10)
+        ax.add_patch(rect)
+
 def animate_simulation(sim: navier_stokes_simulation, 
                      quiver_scale: Optional[float] = None, plot_log_vel: bool = False,
-                     log_vel_exp: float = 2, frame_skip: Optional[int] = None, save: Optional[str] = None) -> ani.FuncAnimation:
+                     log_vel_exp: float = 2, frame_skip: Optional[int] = None, save: Optional[str] = None,
+                     plot_field: str = 'velocity', arrow_skip: Optional[int] = None) -> ani.FuncAnimation:
     if frame_skip is None:
         # frame_skip: int = len(solutions[0]) / 100
         frame_skip = 20
@@ -27,10 +62,18 @@ def animate_simulation(sim: navier_stokes_simulation,
     P_sol = sim.p_history[::frame_skip]
     t_sol = sim.t_history[::frame_skip]
     
+    # Compute velocity magnitude arrays:
+    M_sol = []
+    
     for i in range(len(U_sol)):
         U_sol[i] = conv.U_like_to_grid(U_sol[i])
         V_sol[i] = conv.V_like_to_grid(V_sol[i])
         P_sol[i] = conv.P_like_to_grid(P_sol[i])
+        
+        # Calculate velocity magnitude:
+        M_sol.append(np.sqrt(U_sol[i]**2 + V_sol[i]**2))
+        # Calculate velocity magnitude:
+        M_sol.append(np.sqrt(U_sol[i]**2 + V_sol[i]**2))
         
         # Convert velocity vectors to logarithmic scale for better visualization:
         if plot_log_vel:
@@ -58,25 +101,42 @@ def animate_simulation(sim: navier_stokes_simulation,
     fig, ax = plt.subplots(figsize = (7, 7))
     ax.set_xlim(0, sim.len_x)
     ax.set_ylim(sim.len_y, 0) # invert y-limits so that plot is right side up
+    ax.set_aspect('equal', adjustable='box')  # maintain aspect ratio
     
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_title(f"Grid: ({N_x}, {N_y})\n" + f"t = {np.round(t_sol[0], 3)}")
 
-    # Initial image plot for pressure field:
-    im = ax.imshow(np.flipud(P_sol[0]), extent = (0, sim.len_x, 0, sim.len_y), origin = 'lower', cmap="seismic")
+    # Choose field to plot based on plot_field parameter:
+    if plot_field == 'pressure':
+        field_data = P_sol
+        cmap = "seismic"
+        field_label = 'Pressure'
+    else:  # default to velocity magnitude
+        field_data = M_sol
+        cmap = "viridis"
+        field_label = 'Velocity Magnitude'
+
+    # Initial image plot for the chosen field:
+    im = ax.imshow(np.flipud(field_data[0]), extent = (0, sim.len_x, 0, sim.len_y), origin = 'lower', cmap=cmap)
 
     # Initial quiver plot for velocity field:
-    skip = int(np.round(3 * N_x / 50))  # reduce number of arrows for clarity and performance
+    if arrow_skip is None:
+        skip = max(1, int(np.round(N_x / 25)))  # show more arrows by default
+    else:
+        skip = arrow_skip
     quiv = ax.quiver(X[::skip, ::skip], Y[::skip, ::skip], U_sol[0][::skip, ::skip], -V_sol[0][::skip, ::skip], 
                      color = 'black', scale_units = 'xy', scale = quiver_scale)
     
-    # Colorbar for pressure values:
+    # Colorbar for the plotted field:
     cbar = fig.colorbar(im, ax = ax)
-    cbar.set_label('Pressure')
+    cbar.set_label(field_label)
+    
+    # Draw boxes (obstacles/boundaries):
+    draw_boxes(ax, sim)
 
     def update(frame):        
-        im.set_data(P_sol[frame])
+        im.set_data(field_data[frame])
         quiv.set_UVC(U_sol[frame][::skip, ::skip], -V_sol[frame][::skip, ::skip])
         
         if frame % 5 == 0:
@@ -107,27 +167,15 @@ def streamlines_and_magnitudes(sim: navier_stokes_simulation, plot_times: list[f
         U_sol[i] = conv.U_like_to_grid(U_sol[i])
         V_sol[i] = conv.V_like_to_grid(V_sol[i])
     
-    # Find the indices in the solutions lists that correspond to the timestep that comes immediately after each of the requested plot times:
-    current_time_index: int = 0
-    plot_time_indices: list[int] = []
-    plot_times.sort()
-    plot_times = list(tuple(plot_times))
-    
-    for index, time in enumerate(t_sol):
-        if time >= plot_times[current_time_index]:
-            plot_time_indices.append(index)
-            
-            current_time_index = current_time_index + 1
-            
-        if current_time_index == len(plot_times):
-            break
+    # Find the indices closest to the requested plot times:
+    t_sol_array = np.array(t_sol)
+    plot_time_indices = [np.argmin(np.abs(t_sol_array - t)) for t in plot_times]
         
     # Plot streamlines and velocity magnitudes of all requested time steps:    
     a, b = domain_size
     N_x, N_y = U_sol[0].shape
     
     X, Y = np.meshgrid(np.linspace(0, a, N_x), np.linspace(0, b, N_y))
-        
     for plot_index in plot_time_indices:
         U: np.ndarray = U_sol[plot_index]
         V: np.ndarray = V_sol[plot_index]
@@ -135,29 +183,34 @@ def streamlines_and_magnitudes(sim: navier_stokes_simulation, plot_times: list[f
         
         M: np.ndarray = np.sqrt(np.square(U) + np.square(V))
         
-        plt.figure(figsize = plot_params.get('figsize', (7, 7)))
+        fig, ax = plt.subplots(figsize = plot_params.get('figsize', (7, 7)))
+        ax.set_aspect('equal', adjustable='box')  # maintain aspect ratio
         
         # Contour plot of velocity magnitude:
-        contour = plt.contourf(X, Y, M, 
+        print(X.shape, Y.shape, M.shape)
+        contour = ax.contourf(X, Y, M, 
                      levels = plot_params.get('contour levels', 50), 
                      cmap = plot_params.get('cmap', colormaps['jet']))
         
         # Add colorbar for velocity magnitude:
-        plt.colorbar(contour, label='Velocity Magnitude')
+        fig.colorbar(contour, ax=ax, label='Velocity Magnitude')
         
         # Streamplot of stream lines:
-        plt.streamplot(X, Y, U, V, 
+        ax.streamplot(X, Y, U, V, 
                        color = plot_params.get('streamline color', 'white'), 
                        density = plot_params.get('streamline density', 1.5), 
                        linewidth = plot_params.get('streamline linewidth', 0.7))
         
-        plt.xlim(0, a)
-        plt.ylim(b, 0) # invert y-limits so that plot is right side up
+        ax.set_xlim(0, a)
+        ax.set_ylim(b, 0) # invert y-limits so that plot is right side up
         
-        plt.title(f"Grid: ({N_x}, {N_y})\n" + f"t = {t:.2f}")
+        ax.set_title(f"Grid: ({N_x}, {N_y})\n" + f"t = {t:.2f}")
         
-        plt.xlabel('x')
-        plt.ylabel('y')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        
+        # Draw boxes (obstacles/boundaries):
+        draw_boxes(ax, sim)
         
         if save_params != None:
             title: str = save_params['title'] + f'_t{t:.1f}.png'

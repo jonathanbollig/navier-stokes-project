@@ -78,7 +78,16 @@ class navier_stokes_simulation:
             self.v_history: list[np.ndarray] = []
             self.p_history: list[np.ndarray] = []
             self.t_history: list[float] = []
-    
+            self.sparceify_factor: int = 1  # default no sparcification
+
+            # to be filled later
+            self.boundary_type = None
+            self.boxes = []
+        
+    def set_boundary_type_and_boxes(self, type_: str, boxes: list) -> None:
+        self.boundary_type = type_
+        self.boxes = boxes
+
     def calc_timestep(self) -> float:
         if self.tau <= 0 or self.tau > 1:
             raise ValueError("tau must be from (0, 1]")
@@ -174,37 +183,55 @@ class navier_stokes_simulation:
             self.V[-1, a:b] = V_val
         else:
             raise ValueError("side must be one of 'left', 'right', 'top', 'bottom'")
-        
-    def apply_boundary_conditions(self, type_: str = "lid") -> None:
-        if type_ == "lid":
+
+    def apply_boundary_conditions(self) -> None:
+        if self.boundary_type == "lid":
             self.apply_boundary_condition('left')
             self.apply_boundary_condition('right')
             self.apply_boundary_condition('top', U_val=self.x_vel)
             self.apply_boundary_condition('bottom')
-        if type_ == "lid_floor":
+        elif self.boundary_type == "lid_floor":
             self.apply_boundary_condition('left')
             self.apply_boundary_condition('right')
             self.apply_boundary_condition('top', U_val=self.x_vel)
             self.apply_boundary_condition('bottom', U_val=self.x_vel)
-        if type_ == "channel":
+        elif self.boundary_type == "channel":
             self.apply_boundary_condition('left', U_val=self.x_vel)
             self.apply_boundary_condition('right', U_val=self.x_vel)
             self.apply_boundary_condition('top')
             self.apply_boundary_condition('bottom')
-        if type_ == "s_channel":
+        elif self.boundary_type == "s_channel":
             self.apply_boundary_condition('left', U_val=self.x_vel, start_val=int(self.yn/2))
             self.apply_boundary_condition('right', U_val=self.x_vel, end_val=int(self.yn/2))
             self.apply_boundary_condition('top')
             self.apply_boundary_condition('bottom')
+        elif self.boundary_type == "voided_channel":
+            self.apply_boundary_condition('left', U_val=self.x_vel)
+            self.apply_boundary_condition('right', U_val=self.x_vel)
+            self.apply_boundary_condition('top', U_val=self.x_vel)
+            self.apply_boundary_condition('bottom', U_val=self.x_vel)
+        for box in self.boxes:
+            self.apply_box_boundary(box_start_x=int(box[0]), box_end_x=int(box[1]),
+                                    box_start_y=int(box[2]), box_end_y=int(box[3]))
 
-    def iterate(self, t_end: float, N_max_P: int = 100, type_:str = "lid") -> None:
+    def apply_box_boundary(self, box_start_x: int, box_end_x: int, box_start_y: int, box_end_y: int) -> None:
+        # Apply no-slip boundary conditions around a rectangular box defined by the given grid indices.
+        
+        box_end_x = box_end_x
+        box_end_y = box_end_y 
+        box_start_x = box_start_x
+        box_start_y = box_start_y
+        self.U[box_start_y:box_end_y, box_start_x:box_end_x] = 0  # Left side
+        self.V[box_start_y:box_end_y, box_start_x:box_end_x] = 0  # Top side
+
+    def iterate(self, t_end: float, N_max_P: int = 100) -> None:
         # Print a message at certain timesteps to track progress:
         print_times: np.ndarray = np.linspace(0, t_end, 20)
         print_index: int = 0
 
         t: float = 0
         while t < t_end:
-            self.apply_boundary_conditions(type_)
+            self.apply_boundary_conditions()
             delta_t: float = self.calc_timestep()
 
             F, G = self.calc_F_and_G(delta_t)
@@ -225,6 +252,13 @@ class navier_stokes_simulation:
                 print(f"Passed t = {print_times[print_index]:.2f} / {t_end:.2f}")    
                 print_index = print_index + 1
     
+    def sparcify_history(self, factor: int) -> None:
+        self.u_history = self.u_history[::factor]
+        self.v_history = self.v_history[::factor]
+        self.p_history = self.p_history[::factor]
+        self.t_history = self.t_history[::factor]
+        self.sparceify_factor = factor
+
     def save(self, filename: str) -> None:
         """Save the complete simulation object to a file using pickle."""
         with open(filename, 'wb') as f:
@@ -237,15 +271,18 @@ if __name__ == '__main__':
     omega: float = 1
     epsilon: float = 0.01
     x_vel: float = 2
+    N_max_P: int = 100
 
     # variables:
     nx: int = 50
     ny: int = 50
     len_x: float = 1
     len_y: float = 1
-    Re: float = 2000
+    Re: float = 4001
     T_max: float = 5
-    type_: str = "s_channel"
+    type_: str = "lid"
+    boxes: list = [[nx/4, nx*2/4, ny*3/8, ny*5/8]]  # list of boxes defined by [start_x, end_x, start_y, end_y] in grid indices
+    addon: str = "box2"  # for filename uniqueness
 
     """
     current types:
@@ -253,9 +290,10 @@ if __name__ == '__main__':
     "lid_floor": both top and bottom walls move with lid velocity
     "channel"  : left and right walls move with x_vel velocity
     "s_channel": left wall moves with x_vel in upper half, right wall moves with x_vel in lower half
+    "voided_channel": all four walls move with x_vel velocity
     """
     
-    filename: str = f"{type_}_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}.pkl"
+    filename: str = f"{type_}_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}{addon}.pkl"
     
     # Check if file exists
     if os.path.exists(filename):
@@ -265,11 +303,13 @@ if __name__ == '__main__':
     else:
         print("Running new simulation...")
         simulation = navier_stokes_simulation(nx, ny, len_x, len_y, x_vel, Re, tau, omega, epsilon)
-        simulation.iterate(t_end=T_max, type_=type_)
-        # simulation.save(filename)
-        # print(f"Simulation saved to {filename}")
+        simulation.set_boundary_type_and_boxes(type_, boxes)
+        simulation.iterate(T_max, N_max_P=N_max_P)
+        simulation.sparcify_history(factor=5)  # save every 10th timestep only
+        simulation.save(filename)
+        print(f"Simulation saved to {filename}")
     
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
-    quiver_scale = 14   # 8     # adjust length of plotted arrows (smaller -> longer)
-    # animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel)
-    plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
+    quiver_scale = 30   # 8     # adjust length of plotted arrows (smaller -> longer)
+    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=1, arrow_skip=1, plot_field="pre")
+    # plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
