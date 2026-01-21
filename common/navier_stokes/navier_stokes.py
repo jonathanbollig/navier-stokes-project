@@ -43,6 +43,7 @@ import derivatives as deriv
 import plotting as plot
 
 from typing import Literal
+from numba import jit
 
 def norm_L2(field: np.ndarray) -> float:
     return np.sqrt(1 / (field.shape[0] * field.shape[1]) * np.cumsum(np.square(field))[-1])
@@ -139,22 +140,37 @@ class navier_stokes_simulation:
         P_0_norm: float = norm_L2(self.P)
         residual_norm: float = self.epsilon * P_0_norm + 1
         n = 0
+        dx2 = self.delta_x**2
+        dy2 = self.delta_y**2
         
         while residual_norm >= self.epsilon * P_0_norm and n < N_max:
-            P_new: np.ndarray = np.zeros_like(P_it)
+            # P_new: np.ndarray = np.zeros_like(P_it)
             
-            P_sum: np.ndarray = (P_it[1:-1, 2:] + P_it[1:-1, :-2]) / self.delta_x**2 + (P_it[2:, 1:-1] + P_it[:-2, 1:-1]) / self.delta_y**2
-            P_new[1:-1, 1:-1] = (1 - self.omega) * P_it[1:-1, 1:-1] + self.omega / (2 * (1 / self.delta_x**2 + 1 / self.delta_y**2)) * (P_sum - RHS)
+            # P_sum: np.ndarray = (P_it[1:-1, 2:] + P_it[1:-1, :-2]) / self.delta_x**2 + (P_it[2:, 1:-1] + P_it[:-2, 1:-1]) / self.delta_y**2
+            # P_new[1:-1, 1:-1] = (1 - self.omega) * P_it[1:-1, 1:-1] + self.omega / (2 * (1 / self.delta_x**2 + 1 / self.delta_y**2)) * (P_sum - RHS)
             
-            # Set boundary values:
-            P_new[0, :], P_new[-1, :] = P_it[1, :], P_it[-2, :]
-            P_new[:, 0], P_new[:, -1] = P_it[:, 1], P_it[:, -2]
+            # # Set boundary values:
+            # P_new[0, :], P_new[-1, :] = P_it[1, :], P_it[-2, :]
+            # P_new[:, 0], P_new[:, -1] = P_it[:, 1], P_it[:, -2]
             
-            residual: np.ndarray = deriv.lin_x(P_new, self.delta_x, 2) + deriv.lin_y(P_new, self.delta_y, 2) - RHS
+            # residual: np.ndarray = deriv.lin_x(P_new, self.delta_x, 2) + deriv.lin_y(P_new, self.delta_y, 2) - RHS
+            # residual_norm = norm_L2(residual)
+            
+            # P_it = P_new
+            # n = n + 1
+            for j in range(1, self.yn-1):
+                for i in range(1, self.xn-1):
+                    term_x = (P_it[j, i+1] + P_it[j, i-1]) / dx2
+                    term_y = (P_it[j+1, i] + P_it[j-1, i]) / dy2
+                    P_it[j, i] = (1 - self.omega) * P_it[j, i] + self.omega / (2 * (1/dx2 + 1/dy2)) * (term_x + term_y - RHS[j, i])
+
+            P_it[0, :], P_it[-1, :] = P_it[1, :], P_it[-2, :]
+            P_it[:, 0], P_it[:, -1] = P_it[:, 1], P_it[:, -2]
+
+            residual = deriv.lin_x(P_it, self.delta_x, 2) + deriv.lin_y(P_it, self.delta_y, 2) - RHS
             residual_norm = norm_L2(residual)
-            
-            P_it = P_new
-            n = n + 1
+
+            n +=1
 
         self.P = P_it
     
@@ -268,18 +284,18 @@ class navier_stokes_simulation:
 if __name__ == '__main__':
     # permanent values:
     tau: float = 1
-    omega: float = 1
+    omega: float = 1.7
     epsilon: float = 0.01
     x_vel: float = 2
     N_max_P: int = 100
 
     # variables:
-    nx: int = 50
-    ny: int = 50
+    nx: int = 30
+    ny: int = 30
     len_x: float = 1
     len_y: float = 1
-    Re: float = 4001
-    T_max: float = 5
+    Re: float = 10
+    T_max: float = 2
     type_: str = "lid"
     boxes: list = [[nx/4, nx*2/4, ny*3/8, ny*5/8]]  # list of boxes defined by [start_x, end_x, start_y, end_y] in grid indices
     addon: str = "box2"  # for filename uniqueness
@@ -311,5 +327,5 @@ if __name__ == '__main__':
     
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 30   # 8     # adjust length of plotted arrows (smaller -> longer)
-    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=1, arrow_skip=1, plot_field="pre")
+    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=1, arrow_skip=1, plot_field="pressure")
     # plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
