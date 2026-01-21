@@ -14,6 +14,35 @@ from typing import Any, Optional
 from navier_stokes import navier_stokes_simulation
 import conversions as conv
 
+def draw_circles(ax: plt.Axes, sim: navier_stokes_simulation) -> None:
+    """
+    Draw black circles on the axes for each circle obstacle in sim.circle.
+    
+    Parameters:
+    -----------
+    ax : plt.Axes
+        The matplotlib axes to draw on
+    sim : navier_stokes_simulation
+        The simulation object containing circles and grid information
+    """
+    if not hasattr(sim, 'circle') or not sim.circle:
+        return
+    
+    # Convert grid indices to physical coordinates
+    dx = sim.len_x / sim.xn
+    dy = sim.len_y / sim.yn
+    
+    for circle in sim.circle:
+        x_center = circle[0] * dx
+        y_center = circle[1] * dy
+        radius = circle[2] * dx  # Convert grid units to physical units
+        
+        # Add a red circle
+        circ = plt.Circle((x_center, y_center), radius,
+                         facecolor='black', edgecolor='black',
+                         linewidth=0, zorder=10)
+        ax.add_patch(circ)
+
 def draw_boxes(ax: plt.Axes, sim: navier_stokes_simulation) -> None:  # type: ignore
     """
     Draw black rectangles on the axes for each box in sim.boxes.
@@ -134,6 +163,7 @@ def animate_simulation(sim: navier_stokes_simulation,
     
     # Draw boxes (obstacles/boundaries):
     draw_boxes(ax, sim)
+    draw_circles(ax, sim)
 
     def update(frame):        
         im.set_data(field_data[frame])
@@ -211,6 +241,7 @@ def streamlines_and_magnitudes(sim: navier_stokes_simulation, plot_times: list[f
         
         # Draw boxes (obstacles/boundaries):
         draw_boxes(ax, sim)
+        draw_circles(ax, sim)
         
         if save_params != None:
             title: str = save_params['title'] + f'_t{t:.1f}.png'
