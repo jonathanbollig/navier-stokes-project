@@ -45,6 +45,39 @@ import plotting as plot
 from typing import Literal
 from numba import jit
 
+@jit(nopython=True)
+def sor_solver_fast(P_it, RHS, omega, delta_x, delta_y, yn, xn, N_max, epsilon, P_0_norm):
+    dx2 = delta_x**2
+    dy2 = delta_y**2
+    n = 0
+    residual = np.zeros_like(P_it)
+
+    residual_norm = epsilon * P_0_norm + 1.0 
+    
+    while residual_norm > epsilon * P_0_norm and n < N_max:
+        
+        for j in range(1, yn):
+            for i in range(1, xn):
+                term_x = (P_it[j, i+1] + P_it[j, i-1]) / dx2
+                term_y = (P_it[j+1, i] + P_it[j-1, i]) / dy2
+                P_it[j, i] = (1 - omega) * P_it[j, i] + omega / (2 * (1/dx2 + 1/dy2)) * (term_x + term_y - RHS[j, i])
+
+        P_it[0, :], P_it[-1, :] = P_it[1, :], P_it[-2, :]
+        P_it[:, 0], P_it[:, -1] = P_it[:, 1], P_it[:, -2]
+
+        max_res = 0
+
+        for j in range(1, yn):
+            for i in range(1, xn):
+                residual = (P_it[j, i+1] - 2*P_it[j,i] + P_it[j, i-1])/dx2 + (P_it[j+1, i] - 2*P_it[j,i] + P_it[j-1, i])/dy2 - RHS[j, i]
+
+                if abs(residual) > max_res:
+                    max_res = abs(residual)
+        residual_norm = max_res
+
+        n +=1
+    return P_it
+
 def norm_L2(field: np.ndarray) -> float:
     return np.sqrt(1 / (field.shape[0] * field.shape[1]) * np.cumsum(np.square(field))[-1])
 
@@ -131,19 +164,38 @@ class navier_stokes_simulation:
         # Convert F and G to actual grid points since they refer to different coordinate systems:
         F_grid: np.ndarray = conv.U_like_to_grid(F)
         G_grid: np.ndarray = conv.V_like_to_grid(G)
-        RHS: np.ndarray = 1 / delta_t * (deriv.lin_x(F_grid, self.delta_x) + deriv.lin_y(G_grid, self.delta_y))
-        
-        # Convert RHS-array to P-grid since it referred to actual grid:
-        RHS = conv.P_like_from_grid(RHS)
-        
         P_it: np.ndarray = self.P.copy()
+        RHS = np.zeros_like(P_it)
+
+        # deriv_x = deriv.lin_x(F_grid, self.delta_x)
+        # deriv_y = deriv.lin_y(G_grid, self.delta_y)
+        
+        # RHS[1:-2, 1:-2]: np.ndarray = 1 / delta_t * (deriv.lin_x(F_grid, self.delta_x) + deriv.lin_y(G_grid, self.delta_y))
+        
+        # Compute derivative of F and G on the pressure grid
+        # F has shape (yn+1, xn), take derivative in x direction at pressure points
+        deriv_F = np.zeros((self.yn + 1, self.xn + 1))
+        deriv_F[:, 1:-1] = (F[:, 1:] - F[:, :-1]) / self.delta_x
+        deriv_F[:, 0] = (F[:, 0] - 0) / self.delta_x      # assume F=0 at left
+        deriv_F[:, -1] = (0 - F[:, -1]) / self.delta_x    # assume F=0 at right
+    
+        # G has shape (yn, xn+1), take derivative in y direction at pressure points
+        deriv_G = np.zeros((self.yn + 1, self.xn + 1))
+        deriv_G[1:-1, :] = (G[1:, :] - G[:-1, :]) / self.delta_y
+        deriv_G[0, :] = (G[0, :] - 0) / self.delta_y      # assume G=0 at bottom
+        deriv_G[-1, :] = (0 - G[-1, :]) / self.delta_y    # assume G=0 at top
+    
+        
+        RHS = (1 / delta_t) * (deriv_F + deriv_G)
+    
+        # Convert RHS-array to P-grid since it referred to actual grid:
+        #RHS = conv.P_like_from_grid(RHS)
+
         P_0_norm: float = norm_L2(self.P)
         residual_norm: float = self.epsilon * P_0_norm + 1
         n = 0
-        dx2 = self.delta_x**2
-        dy2 = self.delta_y**2
         
-        while residual_norm >= self.epsilon * P_0_norm and n < N_max:
+        #while residual_norm >= self.epsilon * P_0_norm and n < N_max:
             # P_new: np.ndarray = np.zeros_like(P_it)
             
             # P_sum: np.ndarray = (P_it[1:-1, 2:] + P_it[1:-1, :-2]) / self.delta_x**2 + (P_it[2:, 1:-1] + P_it[:-2, 1:-1]) / self.delta_y**2
@@ -158,21 +210,24 @@ class navier_stokes_simulation:
             
             # P_it = P_new
             # n = n + 1
-            for j in range(1, self.yn-1):
-                for i in range(1, self.xn-1):
-                    term_x = (P_it[j, i+1] + P_it[j, i-1]) / dx2
-                    term_y = (P_it[j+1, i] + P_it[j-1, i]) / dy2
-                    P_it[j, i] = (1 - self.omega) * P_it[j, i] + self.omega / (2 * (1/dx2 + 1/dy2)) * (term_x + term_y - RHS[j, i])
 
-            P_it[0, :], P_it[-1, :] = P_it[1, :], P_it[-2, :]
-            P_it[:, 0], P_it[:, -1] = P_it[:, 1], P_it[:, -2]
+        P_0_norm = norm_L2(self.P)
+        if P_0_norm == 0.0:
+            P_0_norm = 1.0
 
-            residual = deriv.lin_x(P_it, self.delta_x, 2) + deriv.lin_y(P_it, self.delta_y, 2) - RHS
-            residual_norm = norm_L2(residual)
+        self.P = sor_solver_fast(
+            self.P.copy(),
+            RHS,
+            self.omega,
+            self.delta_x,
+            self.delta_y,
+            self.yn+1,
+            self.xn+1,
+            N_max,
+            self.epsilon,
+            P_0_norm
+            )
 
-            n +=1
-
-        self.P = P_it
     
     def apply_boundary_condition(self, side: Literal['left', 'right', 'top', 'bottom'],
                                  U_val: float = 0, V_val: float = 0,
@@ -290,12 +345,12 @@ if __name__ == '__main__':
     N_max_P: int = 100
 
     # variables:
-    nx: int = 30
-    ny: int = 30
+    nx: int = 60
+    ny: int = 60
     len_x: float = 1
     len_y: float = 1
-    Re: float = 10
-    T_max: float = 2
+    Re: float = 4000
+    T_max: float = 20
     type_: str = "lid"
     boxes: list = [[nx/4, nx*2/4, ny*3/8, ny*5/8]]  # list of boxes defined by [start_x, end_x, start_y, end_y] in grid indices
     addon: str = "box2"  # for filename uniqueness
@@ -327,5 +382,5 @@ if __name__ == '__main__':
     
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 30   # 8     # adjust length of plotted arrows (smaller -> longer)
-    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=1, arrow_skip=1, plot_field="pressure")
+    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=2, arrow_skip=2, plot_field="pressure")
     # plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
