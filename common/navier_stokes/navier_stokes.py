@@ -117,12 +117,10 @@ class navier_stokes_simulation:
             # to be filled later
             self.boundary_type = None
             self.boxes = []
-            self.circle = []
         
-    def set_boundary_type_and_boxes(self, type_: str, boxes: list, circle: list) -> None:
+    def set_boundary_type_and_boxes(self, type_: str, boxes: list) -> None:
         self.boundary_type = type_
         self.boxes = boxes
-        self.circle = circle
 
     def calc_timestep(self) -> float:
         if self.tau <= 0 or self.tau > 1:
@@ -286,31 +284,17 @@ class navier_stokes_simulation:
         for box in self.boxes:
             self.apply_box_boundary(box_start_x=int(box[0]), box_end_x=int(box[1]),
                                     box_start_y=int(box[2]), box_end_y=int(box[3]))
-        for circle in self.circle:
-            self.apply_circle_conditions(circle)
 
     def apply_box_boundary(self, box_start_x: int, box_end_x: int, box_start_y: int, box_end_y: int) -> None:
         # Apply no-slip boundary conditions around a rectangular box defined by the given grid indices.
         
+        print("Applying box boundary:", box_start_x, box_end_x, box_start_y, box_end_y)
         box_end_x = box_end_x
         box_end_y = box_end_y 
         box_start_x = box_start_x
         box_start_y = box_start_y
         self.U[box_start_y:box_end_y, box_start_x:box_end_x] = 0  # Left side
         self.V[box_start_y:box_end_y, box_start_x:box_end_x] = 0  # Top side
-
-    def apply_circle_conditions(self, circle) -> None:
-        x_mid, y_mid, radius = circle
-
-        # Create coordinate grids for U (shape: yn+1, xn)
-        X_U, Y_U = np.meshgrid(np.arange(self.xn), np.arange(self.yn + 1))
-        circle_mask_U = (X_U - x_mid)**2 + (Y_U - y_mid)**2 <= radius**2
-        self.U[circle_mask_U] = 0
-
-        # Create coordinate grids for V (shape: yn, xn+1)
-        X_V, Y_V = np.meshgrid(np.arange(self.xn + 1), np.arange(self.yn))
-        circle_mask_V = (X_V - x_mid)**2 + (Y_V - y_mid)**2 <= radius**2
-        self.V[circle_mask_V] = 0
 
     def iterate(self, t_end: float, N_max_P: int = 100) -> None:
         # Print a message at certain timesteps to track progress:
@@ -347,8 +331,18 @@ class navier_stokes_simulation:
         self.t_history = self.t_history[::factor]
         self.sparceify_factor = factor
 
+    def keys(self) -> list:
+        """Return list of attribute names for dict-like access compatibility."""
+        return list(self.__dict__.keys())
+
     def save(self, filename: str) -> None:
         """Save the complete simulation object to a file using pickle."""
+        # check file does not already exist. If yes, prompt user for overwrite permission
+        if os.path.exists(filename):
+            response = input(f"File {filename} already exists. Overwrite? (y/n): ")
+            if response.lower() != 'y':
+                print("Save operation cancelled.")
+                return
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
 
@@ -366,13 +360,11 @@ if __name__ == '__main__':
     ny: int = 60
     len_x: float = 1
     len_y: float = 1
-    Re: float = 1000
-    T_max: float = 60
+    Re: float = 4000
+    T_max: float = 20
     type_: str = "lid"
-    circle: list = [[nx//2, ny//2, 40]] # [x_mid, y_mid, radius]
-    boxes: list = []
-    #boxes: list = [[nx/4, nx*2/4, ny*3/8, ny*5/8]]  # list of boxes defined by [start_x, end_x, start_y, end_y] in grid indices
-    addon: str = "circle5"  # for filename uniqueness
+    boxes: list = [[nx/4, nx*2/4, ny*3/8, ny*5/8]]  # list of boxes defined by [start_x, end_x, start_y, end_y] in grid indices
+    addon: str = "box3"  # for filename uniqueness
 
     """
     current types:
@@ -384,7 +376,6 @@ if __name__ == '__main__':
     """
     
     filename: str = f"{type_}_nx{nx}_ny{ny}_re{Re}_t{int(T_max*1000)}{addon}.pkl"
-    
     # Check if file exists
     if os.path.exists(filename):
         print(f"Loading simulation from {filename}...")
@@ -393,7 +384,7 @@ if __name__ == '__main__':
     else:
         print("Running new simulation...")
         simulation = navier_stokes_simulation(nx, ny, len_x, len_y, x_vel, Re, tau, omega, epsilon)
-        simulation.set_boundary_type_and_boxes(type_, boxes, circle)
+        simulation.set_boundary_type_and_boxes(type_, boxes)
         simulation.iterate(T_max, N_max_P=N_max_P)
         simulation.sparcify_history(factor=5)  # save every 10th timestep only
         simulation.save(filename)
@@ -401,5 +392,5 @@ if __name__ == '__main__':
     
     plot_log_vel = True # False # enable logarithmic scaling of velocity vectors
     quiver_scale = 30   # 8     # adjust length of plotted arrows (smaller -> longer)
-    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=4, arrow_skip=5, plot_field="pressure")
-    plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
+    animation = plot.animate_simulation(simulation, quiver_scale, plot_log_vel, frame_skip=2, arrow_skip=2, plot_field="pressure")
+    # plot.streamlines_and_magnitudes(simulation, [T_max], [len_x, len_y])
