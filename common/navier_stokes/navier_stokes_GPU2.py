@@ -453,7 +453,7 @@ class NavierStokesGPU2:
 
     def apply_boundary_conditions(self, t: float, t_end: float) -> None:
         if self.x_vel_type == 'sinus':
-            x_vel = self.x_vel * cp.sin(2 *cp.pi*t/t_end/2)  # two cycles over t_end
+            x_vel = self.x_vel * cp.sin(2 *cp.pi*t/t_end*2)  # two cycles over t_end
         else:
             x_vel = self.x_vel
         

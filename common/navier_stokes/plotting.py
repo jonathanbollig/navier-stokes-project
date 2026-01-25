@@ -205,9 +205,10 @@ def streamlines_and_magnitudes(sim: "navier_stokes_simulation", plot_times: Opti
         
         # Contour plot of velocity magnitude:
         print(X.shape, Y.shape, M.shape)
+        bounds = np.linspace(0, 2, plot_params.get('contour levels', 200))
         contour = ax.contourf(X, Y, M, 
-                     levels = plot_params.get('contour levels', 50), 
-                     cmap = plot_params.get('cmap', colormaps['jet']))
+                     levels = bounds, 
+                     cmap = plot_params.get('cmap', colormaps['jet']), vmax = v_max)
         
         # Add colorbar for velocity magnitude:
         fig.colorbar(contour, ax=ax, label='Velocity Magnitude')
@@ -221,7 +222,7 @@ def streamlines_and_magnitudes(sim: "navier_stokes_simulation", plot_times: Opti
         ax.set_xlim(0, a)
         ax.set_ylim(b, 0) # invert y-limits so that plot is right side up
         
-        ax.set_title(f"Grid: ({N_x}, {N_y})\n" + f"t = {t:.2f}")
+        ax.set_title(f"Re={sim.Re}\nt = {t:.1f}")
         
         ax.set_xlabel('x')
         ax.set_ylabel('y')
