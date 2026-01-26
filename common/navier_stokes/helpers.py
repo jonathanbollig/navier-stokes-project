@@ -25,6 +25,7 @@ default_settings = {
     "T_max": 2,
     "type_": "lid",
     "boxes": [],  # list of boxes defined by [start_x, end_x, start_y, end_y] in grid indices
+    "circle": [],  # list of circles defined by [x_mid, y_mid, radius] in grid indices    
     "addon": "",  # for filename uniqueness
     "solver": "GPU2", # Literal["CPU", "GPU", "GPU2"]
     "x_vel_type": "constant", # Literal["constant", "sinus"]
@@ -63,7 +64,7 @@ def NV_from_settings(settings: dict) -> Union[navier_stokes_simulation, NavierSt
         x_vel=settings["x_vel"],
         x_vel_type=settings["x_vel_type"],
     )
-    NV_simulation.set_boundary_type_and_boxes(settings["type_"], settings["boxes"])
+    NV_simulation.set_boundary_type_and_boxes(settings["type_"], settings["boxes"], settings["circle"])
     NV_simulation.iterate(t_end=settings["T_max"], N_max_P=settings["N_max_P"], max_histories=1000)  # type: ignore
     return NV_simulation
 

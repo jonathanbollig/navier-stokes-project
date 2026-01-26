@@ -309,13 +309,15 @@ class NavierStokesGPU2:
         # Boundary settings
         self.boundary_type = None
         self.boxes = []
+        self.circle = []
         
         # CUDA kernel configuration
         self.block_size = (16, 16)
         
-    def set_boundary_type_and_boxes(self, type_: str, boxes: list) -> None:
+    def set_boundary_type_and_boxes(self, type_: str, boxes: list, circle: list) -> None:
         self.boundary_type = type_
         self.boxes = boxes
+        self.circle = circle
 
     def calc_timestep(self) -> float:
         """Calculate stable timestep based on CFL conditions."""
@@ -486,11 +488,23 @@ class NavierStokesGPU2:
     
         for box in self.boxes:
             self.apply_box_boundary(int(box[0]), int(box[1]), int(box[2]), int(box[3]))
+        for circle in self.circle:
+            self.apply_circle_condition(circle)
 
     def apply_box_boundary(self, box_start_x: int, box_end_x: int, 
                           box_start_y: int, box_end_y: int) -> None:
         self.U[box_start_y:box_end_y, box_start_x:box_end_x] = 0
         self.V[box_start_y:box_end_y, box_start_x:box_end_x] = 0
+
+    def apply_circle_condition(self, circle) -> None:
+        x_mid, y_mid, radius = circle
+        X_U, Y_U = cp.meshgrid(cp.arange(self.xn), cp.arange(self.yn + 1))
+        circle_mask_U = ((X_U - x_mid)**2 + (Y_U - y_mid)**2) <= radius**2
+        self.U[circle_mask_U] = 0
+
+        X_V, Y_V = cp.meshgrid(cp.arange(self.xn + 1), cp.arange(self.yn))
+        circle_mask_V = ((X_V - x_mid)**2 + (Y_V - y_mid)**2) <= radius**2
+        self.V[circle_mask_V] = 0
 
     def update_velocities(self, delta_t: float) -> None:
         """Update velocities from F, G and pressure gradient."""

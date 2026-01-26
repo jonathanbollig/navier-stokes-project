@@ -6,10 +6,18 @@ Created on Sun Jan 11 19:52:56 2026
 """
 
 from matplotlib import colormaps
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
 import numpy as np
 from typing import Any, Optional, TYPE_CHECKING
+
+plt.rc('font', size=14)          # controls default text sizes
+plt.rc('axes', titlesize=14)     # fontsize of the axes title
+plt.rc('axes', labelsize=17)     # fontsize of the x and y labels
+plt.rc('xtick', labelsize=14)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=14)    # fontsize of the tick labels
+plt.rc('legend', fontsize=14)    # legend fontsize
 
 """
 When calling navier_stokes from another file, it would throw an error due to circular imports.
@@ -19,6 +27,33 @@ if TYPE_CHECKING:
     from navier_stokes import navier_stokes_simulation
 
 import conversions as conv
+def draw_circles(ax: plt.Axes, sim) -> None:
+    """
+    Draw black circles on the axes for each circle obstacle in sim.circle.
+    
+    Parameters:
+    -----------
+    ax : plt.Axes
+        The matplotlib axes to draw on
+    sim : navier_stokes_simulation
+        The simulation object containing circles and grid information
+    """
+    if not hasattr(sim, 'circle') or not sim.circle:
+        return
+    # Convert grid indices to physical coordinates
+    dx = sim.len_x / sim.xn
+    dy = sim.len_y / sim.yn
+    
+    for circle in sim.circle:
+        x_center = circle[0] * dx
+        y_center = circle[1] * dy
+        radius = circle[2] * dx  # Convert grid units to physical units
+        
+        # Add a red circle
+        circ = plt.Circle((x_center, y_center), radius,
+                         facecolor='black', edgecolor='black',
+                         linewidth=0, zorder=10)
+        ax.add_patch(circ)
 
 def draw_boxes(ax: plt.Axes, sim: "navier_stokes_simulation") -> None:  # type: ignore
     """
@@ -137,6 +172,7 @@ def animate_simulation(sim: "navier_stokes_simulation",
     
     # Draw boxes (obstacles/boundaries):
     draw_boxes(ax, sim)
+    draw_circles(ax, sim)
 
     def update(frame):        
         im.set_data(field_data[frame])
@@ -164,7 +200,8 @@ def animate_simulation(sim: "navier_stokes_simulation",
 def streamlines_and_magnitudes(sim: "navier_stokes_simulation", plot_times: Optional[list[float]] = None,
                                domain_size: Optional[list[float]] = None, plot_params: dict = {}, 
                                save_params: Optional[dict] = None, 
-                               v_max = None) -> None:
+                               v_max = None, plot=True, colorbar=False, 
+                               correct_u=0) -> None:
     # Initialize solution arrays (deep copy to avoid modifying original history):
     U_sol = [u.copy() for u in sim.u_history]
     V_sol = [v.copy() for v in sim.v_history]
@@ -195,23 +232,31 @@ def streamlines_and_magnitudes(sim: "navier_stokes_simulation", plot_times: Opti
         U: np.ndarray = U_sol[plot_index]
         V: np.ndarray = V_sol[plot_index]
         t: float = t_sol[plot_index]
-        
+        U = U-correct_u
+
         M: np.ndarray = np.sqrt(np.square(U) + np.square(V))
         if v_max is not None:
             M = np.clip(M, 0, v_max)
         
-        fig, ax = plt.subplots(figsize = plot_params.get('figsize', (7, 7)))
+        if colorbar:
+            fig, ax = plt.subplots(figsize = plot_params.get('figsize', (8, 7)))
+        else:
+            fig, ax = plt.subplots(figsize = plot_params.get('figsize', (7, 7)))
         ax.set_aspect('equal', adjustable='box')  # maintain aspect ratio
         
         # Contour plot of velocity magnitude:
-        print(X.shape, Y.shape, M.shape)
         bounds = np.linspace(0, 2, plot_params.get('contour levels', 200))
+        print(X.shape, Y.shape, M.shape)
         contour = ax.contourf(X, Y, M, 
                      levels = bounds, 
                      cmap = plot_params.get('cmap', colormaps['jet']), vmax = v_max)
         
-        # Add colorbar for velocity magnitude:
-        fig.colorbar(contour, ax=ax, label='Velocity Magnitude')
+        if colorbar:
+            # Add colorbar for velocity magnitude:
+            divider = make_axes_locatable(ax)
+            tick_marks = np.arange(0, 2.1, 0.2)
+            cax = divider.append_axes("right", size="5%", pad=0.5)
+            fig.colorbar(contour, cax=cax, label='Velocity Magnitude', ticks=tick_marks)
         
         # Streamplot of stream lines:
         ax.streamplot(X, Y, U, V, 
@@ -222,16 +267,18 @@ def streamlines_and_magnitudes(sim: "navier_stokes_simulation", plot_times: Opti
         ax.set_xlim(0, a)
         ax.set_ylim(b, 0) # invert y-limits so that plot is right side up
         
-        ax.set_title(f"Re={sim.Re}\nt = {t:.1f}")
+        # ax.set_title(f"Re={sim.Re}\nt = {t:.1f}")
         
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         
         # Draw boxes (obstacles/boundaries):
+        draw_circles(ax, sim)
         draw_boxes(ax, sim)
         fig.tight_layout()
         if save_params != None:
             title: str = save_params['title'] + f'_t{t:.1f}.png'
-            plt.savefig(title, dpi = save_params.get('dpi', 200))
+            plt.savefig(title, dpi = save_params.get('dpi', 200), bbox_inches='tight', pad_inches=0.1)
         
-        plt.show()
+        if plot:    
+            plt.show()
